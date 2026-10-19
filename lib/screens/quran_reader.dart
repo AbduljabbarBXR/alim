@@ -63,22 +63,16 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
         (_current == widget.surah ? widget.focusAyah : null);
 
     return Scaffold(
-      appBar: AppBar(
-        // The surah introduces itself once, in the page banner below; the
-        // toolbar stays quiet.
-        title: const SizedBox.shrink(),
-        actions: [
-          IconButton(
-            tooltip: _translation ? 'Hide translation' : 'Show translation',
-            icon: Icon(
-              _translation ? Icons.translate : Icons.translate_outlined,
-            ),
-            onPressed: () => setState(() => _translation = !_translation),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(58),
-          child: _ReciterBar(
+      appBar: AppBar(title: const SizedBox.shrink()),
+      // One panel carries the surah, the voice and the controls; below it the
+      // pages turn under the finger.
+      body: Column(
+        children: [
+          _SurahPanel(
+            surah: view.valueOrNull?.surah,
+            translation: _translation,
+            onToggleTranslation:
+                () => setState(() => _translation = !_translation),
             reciter: reciter,
             downloaded: downloaded,
             task: downloadTask,
@@ -106,31 +100,31 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
                     ? null
                     : () => _downloadPressed(view.value!, reciter, downloaded),
           ),
-        ),
-      ),
-      // Swiping runs through the surahs, the page following the finger so it
-      // feels like turning, not jumping.
-      body: PageView.builder(
-        controller: _pages,
-        itemCount: 114,
-        onPageChanged: (page) {
-          setState(() => _current = page + 1);
-          if (page + 2 <= 114) ref.read(surahViewProvider(page + 2));
-        },
-        itemBuilder: (context, index) {
-          final surah = index + 1;
-          return _SurahBody(
-            key: ValueKey(surah),
-            surah: surah,
-            scale: profile.arabicScale,
-            translation: _translation,
-            focusAyah: surah == widget.surah ? widget.focusAyah : null,
-            onTapped: (ayah) {
-              if (_tapped[surah] == ayah) return;
-              setState(() => _tapped[surah] = ayah);
-            },
-          );
-        },
+          Expanded(
+            child: PageView.builder(
+              controller: _pages,
+              itemCount: 114,
+              onPageChanged: (page) {
+                setState(() => _current = page + 1);
+                if (page + 2 <= 114) ref.read(surahViewProvider(page + 2));
+              },
+              itemBuilder: (context, index) {
+                final surah = index + 1;
+                return _SurahBody(
+                  key: ValueKey(surah),
+                  surah: surah,
+                  scale: profile.arabicScale,
+                  translation: _translation,
+                  focusAyah: surah == widget.surah ? widget.focusAyah : null,
+                  onTapped: (ayah) {
+                    if (_tapped[surah] == ayah) return;
+                    setState(() => _tapped[surah] = ayah);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -307,7 +301,7 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
             : view.ayat.indexWhere((a) => a.number == widget.focusAyah);
 
     final showBismillah = view.surah.number != 1 && view.surah.number != 9;
-    final headerCount = showBismillah ? 2 : 1;
+    final headerCount = showBismillah ? 1 : 0;
 
     // Landing exactly on a chosen ayah: the list is lazy, so the position is
     // addressed by item index, never by a guessed scroll offset.
@@ -339,18 +333,7 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
       ),
       itemCount: view.ayat.length + headerCount,
       itemBuilder: (context, i) {
-        if (i == 0) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AlimSpace.lg,
-              0,
-              AlimSpace.lg,
-              AlimSpace.sm,
-            ),
-            child: _surahHeader(context, view.surah),
-          );
-        }
-        if (showBismillah && i == 1) {
+        if (showBismillah && i == 0) {
           return const Padding(
             padding: EdgeInsets.fromLTRB(
               AlimSpace.lg,
@@ -389,47 +372,6 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
           },
         );
       },
-    );
-  }
-
-  Widget _surahHeader(BuildContext context, Surah surah) {
-    return AlimCard(
-      padding: const EdgeInsets.all(AlimSpace.md),
-      child: Row(
-        children: [
-          StarNumber(number: surah.number, size: 48, filled: true),
-          const SizedBox(width: AlimSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  surah.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
-                  ),
-                ),
-                Text(
-                  '${surah.meaning} · ${surah.ayat} ayat · ${surah.revelation}',
-                  style: TextStyle(
-                    color: AlimColors.mutedOf(context),
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            surah.nameAr,
-            style: const TextStyle(
-              fontFamily: arabicFamily,
-              fontSize: 24,
-              color: AlimColors.gold,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -545,8 +487,11 @@ class _AyahTile extends StatelessWidget {
   }
 }
 
-class _ReciterBar extends StatelessWidget {
-  const _ReciterBar({
+class _SurahPanel extends StatelessWidget {
+  const _SurahPanel({
+    required this.surah,
+    required this.translation,
+    required this.onToggleTranslation,
     required this.reciter,
     required this.downloaded,
     required this.task,
@@ -563,6 +508,9 @@ class _ReciterBar extends StatelessWidget {
     required this.onDownload,
   });
 
+  final Surah? surah;
+  final bool translation;
+  final VoidCallback onToggleTranslation;
   final Reciter reciter;
   final bool downloaded;
   final DownloadTask? task;
@@ -600,104 +548,178 @@ class _ReciterBar extends StatelessWidget {
           bottom: BorderSide(color: AlimColors.gold.withValues(alpha: 0.28)),
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(AlimSpace.sm, 0, AlimSpace.xs, 0),
-        child: Row(
-          children: [
-            InkWell(
-              borderRadius: BorderRadius.circular(AlimRadius.field),
-              onTap: onChange,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.headphones_outlined,
-                      size: 17,
-                      color: AlimColors.gold,
-                    ),
-                    const SizedBox(width: 7),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 148),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            reciter.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                          Text(
-                            status,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: AlimColors.mutedOf(context),
-                              fontSize: 10.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AlimSpace.lg,
+              AlimSpace.sm,
+              AlimSpace.sm,
+              AlimSpace.xs,
+            ),
+            child: Row(
+              children: [
+                StarNumber(
+                  number: surah?.number ?? surahNumber,
+                  size: 40,
+                  filled: true,
                 ),
-              ),
-            ),
-            const Spacer(),
-            IconButton(
-              tooltip: 'Previous ayah',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.skip_previous, size: 22),
-              onPressed: onPrevious,
-            ),
-            IconButton(
-              tooltip: here && audio.playing ? 'Pause' : 'Listen',
-              visualDensity: VisualDensity.compact,
-              color: AlimColors.gold,
-              icon:
-                  audio.loading && here
-                      ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                      : Icon(
-                        here && audio.playing
-                            ? Icons.pause_circle_filled
-                            : Icons.play_circle_fill,
-                        size: 32,
+                const SizedBox(width: AlimSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        surah?.name ?? '',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
                       ),
-              onPressed: onPlay,
+                      if (surah != null)
+                        Text(
+                          '${surah!.meaning} · ${surah!.ayat} ayat · '
+                          '${surah!.revelation}',
+                          style: TextStyle(
+                            color: AlimColors.mutedOf(context),
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Text(
+                  surah?.nameAr ?? '',
+                  style: const TextStyle(
+                    fontFamily: arabicFamily,
+                    fontSize: 22,
+                    color: AlimColors.gold,
+                  ),
+                ),
+              ],
             ),
-            IconButton(
-              tooltip: 'Next ayah',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.skip_next, size: 22),
-              onPressed: onNext,
+          ),
+          Divider(height: 1, color: AlimColors.gold.withValues(alpha: 0.18)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AlimSpace.sm,
+              0,
+              AlimSpace.xs,
+              0,
             ),
-            IconButton(
-              tooltip:
-                  downloaded
-                      ? 'Saved offline'
-                      : (busy ? 'Downloading' : 'Download this surah'),
-              visualDensity: VisualDensity.compact,
-              icon: Icon(
-                downloaded
-                    ? Icons.download_done
-                    : (busy ? Icons.downloading : Icons.download_outlined),
-                size: 21,
-                color:
-                    downloaded ? Theme.of(context).colorScheme.primary : null,
-              ),
-              onPressed: onDownload,
+            child: Row(
+              children: [
+                InkWell(
+                  borderRadius: BorderRadius.circular(AlimRadius.field),
+                  onTap: onChange,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.headphones_outlined,
+                          size: 17,
+                          color: AlimColors.gold,
+                        ),
+                        const SizedBox(width: 7),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 128),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                reciter.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                              Text(
+                                status,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: AlimColors.mutedOf(context),
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip:
+                      translation ? 'Hide translation' : 'Show translation',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    translation ? Icons.translate : Icons.translate_outlined,
+                    size: 20,
+                  ),
+                  onPressed: onToggleTranslation,
+                ),
+                IconButton(
+                  tooltip: 'Previous ayah',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.skip_previous, size: 22),
+                  onPressed: onPrevious,
+                ),
+                IconButton(
+                  tooltip: here && audio.playing ? 'Pause' : 'Listen',
+                  visualDensity: VisualDensity.compact,
+                  color: AlimColors.gold,
+                  icon:
+                      audio.loading && here
+                          ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : Icon(
+                            here && audio.playing
+                                ? Icons.pause_circle_filled
+                                : Icons.play_circle_fill,
+                            size: 32,
+                          ),
+                  onPressed: onPlay,
+                ),
+                IconButton(
+                  tooltip: 'Next ayah',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.skip_next, size: 22),
+                  onPressed: onNext,
+                ),
+                IconButton(
+                  tooltip:
+                      downloaded
+                          ? 'Saved offline'
+                          : (busy ? 'Downloading' : 'Download this surah'),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    downloaded
+                        ? Icons.download_done
+                        : (busy ? Icons.downloading : Icons.download_outlined),
+                    size: 21,
+                    color:
+                        downloaded
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                  ),
+                  onPressed: onDownload,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

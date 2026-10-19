@@ -178,7 +178,7 @@ class MeScreen extends ConsumerWidget {
             const SizedBox(height: AlimSpace.md),
             Center(
               child: Text(
-                'Alim ${info?.version ?? '1.4.1'}',
+                'Alim ${info?.version ?? '1.4.2'}',
                 style: TextStyle(
                   color: AlimColors.mutedOf(context),
                   fontSize: 12,

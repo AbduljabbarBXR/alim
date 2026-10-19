@@ -21,34 +21,15 @@ class AlimBackdrop extends StatelessWidget {
   }
 }
 
-/// Shared [MaterialApp.builder] so the art and the gold frame sit behind and
-/// over every route, splash and error screen alike.
+/// Shared [MaterialApp.builder] so the art sits behind every route, splash
+/// and error screen alike.
 Widget alimBackdropBuilder(BuildContext context, Widget? child) {
   return Stack(
     children: [
       const Positioned.fill(child: AlimBackdrop()),
       if (child != null) Positioned.fill(child: child),
-      const Positioned.fill(child: IgnorePointer(child: AlimFrame())),
     ],
   );
-}
-
-/// A double gold rule with star corners, laid over the whole app the way a
-/// manuscript page is set inside its frame.
-class AlimFrame extends StatelessWidget {
-  const AlimFrame({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return SafeArea(
-      minimum: const EdgeInsets.all(3),
-      child: CustomPaint(
-        painter: _FramePainter(dark: dark),
-        size: Size.infinite,
-      ),
-    );
-  }
 }
 
 class _ArabesquePainter extends CustomPainter {
@@ -206,70 +187,5 @@ class _ArabesquePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ArabesquePainter oldDelegate) =>
-      oldDelegate.dark != dark;
-}
-
-class _FramePainter extends CustomPainter {
-  const _FramePainter({required this.dark});
-
-  final bool dark;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.width < 80 || size.height < 80) return;
-    final gold = AlimColors.gold;
-    final outer = RRect.fromRectAndRadius(
-      Rect.fromLTWH(4, 4, size.width - 8, size.height - 8),
-      const Radius.circular(20),
-    );
-    canvas.drawRRect(
-      outer,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.1
-        ..color = gold.withValues(alpha: dark ? 0.30 : 0.36),
-    );
-    canvas.drawRRect(
-      outer.deflate(4),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.6
-        ..color = gold.withValues(alpha: dark ? 0.15 : 0.20),
-    );
-
-    final cornerPaint =
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.9
-          ..color = gold.withValues(alpha: dark ? 0.35 : 0.42);
-    for (final c in [
-      Offset(4, 4),
-      Offset(size.width - 4, 4),
-      Offset(4, size.height - 4),
-      Offset(size.width - 4, size.height - 4),
-    ]) {
-      _cornerStar(canvas, c, 7, cornerPaint);
-    }
-  }
-
-  void _cornerStar(Canvas canvas, Offset center, double r, Paint paint) {
-    final path = Path();
-    for (var i = 0; i < 8; i++) {
-      final angle = -math.pi / 2 + i * math.pi / 4;
-      final radius = i.isEven ? r : r * 0.45;
-      final point =
-          center + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
-      if (i == 0) {
-        path.moveTo(point.dx, point.dy);
-      } else {
-        path.lineTo(point.dx, point.dy);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FramePainter oldDelegate) =>
       oldDelegate.dark != dark;
 }

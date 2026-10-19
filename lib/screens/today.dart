@@ -5,13 +5,11 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../services/daily.dart';
-import '../services/prayer.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'dhikr.dart';
 import 'hadith.dart';
-import 'prayer.dart';
 import 'quran_reader.dart';
 import 'stories.dart';
 
@@ -20,14 +18,12 @@ class TodayScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(profileProvider);
     final log = ref.watch(todayLogProvider);
     final tasks = ref.watch(todayTasksProvider);
     final stats = ref.watch(statsProvider);
     final lastRead = ref.watch(lastReadProvider);
     final verse = ref.watch(verseOfDayProvider);
     final hadith = ref.watch(hadithOfDayProvider);
-    final stories = ref.watch(storiesProvider);
     final now = ref.watch(todayProvider);
 
     final logValue = log.valueOrNull;
@@ -46,7 +42,7 @@ class TodayScreen extends ConsumerWidget {
               AlimSpace.xxl,
             ),
             children: [
-              _header(context, ref, profile.name, now, stats.valueOrNull),
+              _header(context, now, stats.valueOrNull),
               const SizedBox(height: AlimSpace.md),
               _tasksCard(context, ref, taskList, logValue),
               const SizedBox(height: AlimSpace.md),
@@ -61,10 +57,6 @@ class TodayScreen extends ConsumerWidget {
                 const SectionHeader('Continue reading'),
                 _continueCard(context, ref, lastRead.value!),
               ],
-              if (stories.valueOrNull != null && stories.value!.isNotEmpty) ...[
-                const SectionHeader('A story tonight'),
-                _storyCard(context, ref, stories.value!),
-              ],
             ],
           ),
         ),
@@ -72,100 +64,23 @@ class TodayScreen extends ConsumerWidget {
     );
   }
 
-  Widget _header(
-    BuildContext context,
-    WidgetRef ref,
-    String name,
-    DateTime now,
-    JourneyStats? stats,
-  ) {
-    final hijri = _hijriLabel(now);
-    return StarLattice(
-      child: Padding(
-        padding: const EdgeInsets.only(top: AlimSpace.lg, bottom: AlimSpace.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              name.isEmpty ? 'Today' : name,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.4,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              hijri,
-              style: TextStyle(
-                color: AlimColors.mutedOf(context),
-                fontSize: 13.5,
-              ),
-            ),
-            const SizedBox(height: AlimSpace.md),
-            Row(
-              children: [
-                AlimPill(
-                  label: '${stats?.streak ?? 0} day streak',
-                  icon: Icons.local_fire_department,
-                  color: AlimColors.rose,
-                ),
-                const SizedBox(width: AlimSpace.xs),
-                if (stats != null)
-                  AlimPill(
-                    label: '${rankFor(stats.xp).title} · ${stats.xp} XP',
-                    icon: Icons.workspace_premium,
-                    color: AlimColors.gold,
-                  ),
-              ],
-            ),
-            const SizedBox(height: AlimSpace.sm),
-            if (stats != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AlimRadius.pill),
-                child: LinearProgressIndicator(
-                  value: rankProgress(stats.xp),
-                  minHeight: 6,
-                  backgroundColor: AlimColors.hairlineOf(context),
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            const SizedBox(height: AlimSpace.sm),
-            _prayerRow(context, ref),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _prayerRow(BuildContext context, WidgetRef ref) {
-    final day = ref.watch(prayerScheduleProvider).valueOrNull;
-    final at = day?.timeOf(day.next);
-    return AlimCard(
-      onTap:
-          () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const PrayerScreen())),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AlimSpace.md,
-        vertical: AlimSpace.sm,
-      ),
+  Widget _header(BuildContext context, DateTime now, JourneyStats? stats) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AlimSpace.sm, bottom: AlimSpace.xs),
       child: Row(
         children: [
-          const Icon(Icons.access_time, size: 17, color: AlimColors.gold),
-          const SizedBox(width: AlimSpace.sm),
-          Expanded(
-            child: Text(
-              at == null
-                  ? 'Set your place for prayer times and qibla'
-                  : '${prayerLabel(day!.next)} at '
-                      '${TimeOfDay.fromDateTime(at).format(context)}',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
+          AlimPill(
+            label: '${stats?.streak ?? 0} day streak',
+            icon: Icons.local_fire_department,
+            color: AlimColors.rose,
           ),
-          Icon(
-            Icons.chevron_right,
-            size: 18,
-            color: AlimColors.mutedOf(context),
+          const Spacer(),
+          Text(
+            _hijriLabel(now),
+            style: TextStyle(
+              color: AlimColors.mutedOf(context),
+              fontSize: 13.5,
+            ),
           ),
         ],
       ),
@@ -281,7 +196,11 @@ class TodayScreen extends ConsumerWidget {
           context,
         ).push(MaterialPageRoute(builder: (_) => const DhikrScreen()));
       case DailyTaskKind.gratitude:
-        FocusScope.of(context).requestFocus(_gratitudeFocus);
+        showGratitudeSheet(
+          context,
+          ref,
+          ref.read(todayLogProvider).valueOrNull?.gratitude ?? '',
+        );
       case DailyTaskKind.story:
         final stories = ref.read(storiesProvider).valueOrNull;
         if (stories != null && stories.isNotEmpty) {
@@ -497,46 +416,6 @@ class TodayScreen extends ConsumerWidget {
     );
   }
 
-  Widget _storyCard(BuildContext context, WidgetRef ref, List<Story> stories) {
-    final pick =
-        stories[ref.watch(todayProvider).difference(DateTime(2026)).inDays %
-            stories.length];
-    return AlimCard(
-      onTap:
-          () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => StoryDetailScreen(story: pick)),
-          ),
-      child: Row(
-        children: [
-          const Icon(Icons.local_library_outlined, color: AlimColors.gold),
-          const SizedBox(width: AlimSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  pick.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15.5,
-                  ),
-                ),
-                Text(
-                  '${pick.minutes} min · ${pick.category}',
-                  style: TextStyle(
-                    color: AlimColors.mutedOf(context),
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right),
-        ],
-      ),
-    );
-  }
-
   String _collectionLabel(String id) {
     switch (id) {
       case 'bukhari':
@@ -553,151 +432,172 @@ class TodayScreen extends ConsumerWidget {
   }
 }
 
-final _gratitudeFocus = FocusNode();
-
-class GratitudeField extends ConsumerStatefulWidget {
+/// A single line that carries the day's gratitude, opening a small writing
+/// window when tapped.
+class GratitudeField extends ConsumerWidget {
   const GratitudeField({super.key, required this.initial});
 
   final String initial;
 
   @override
-  ConsumerState<GratitudeField> createState() => _GratitudeFieldState();
-}
-
-class _GratitudeFieldState extends ConsumerState<GratitudeField> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initial,
-  );
-  late String _saved = widget.initial.trim();
-
-  @override
-  void initState() {
-    super.initState();
-    _gratitudeFocus.addListener(_onFocusChange);
-  }
-
-  @override
-  void dispose() {
-    _gratitudeFocus.removeListener(_onFocusChange);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onFocusChange() {
-    if (!_gratitudeFocus.hasFocus) _save(quiet: true);
-  }
-
-  Future<void> _save({bool quiet = false}) async {
-    final text = _controller.text.trim();
-    if (text == _saved) {
-      if (!quiet) _gratitudeFocus.unfocus();
-      return;
-    }
-    await ref.read(actionsProvider).setGratitude(text);
-    if (!mounted) return;
-    setState(() => _saved = text);
-    if (!quiet) {
-      _controller.clear();
-      _gratitudeFocus.unfocus();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            text.isEmpty ? 'Gratitude cleared.' : 'Gratitude saved for today.',
-          ),
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final saved = initial.trim();
     return AlimCard(
-      padding: const EdgeInsets.all(AlimSpace.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      onTap: () => showGratitudeSheet(context, ref, saved),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AlimSpace.md,
+        vertical: AlimSpace.sm,
+      ),
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.favorite_outline,
-                size: 18,
-                color: AlimColors.rose,
-              ),
-              const SizedBox(width: AlimSpace.xs),
-              Text(
-                'One line of gratitude',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-          const SizedBox(height: AlimSpace.xs),
-          TextField(
-            controller: _controller,
-            focusNode: _gratitudeFocus,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              hintText: 'Today I am thankful for…',
-              isDense: true,
-            ),
-            onSubmitted: (_) => _save(),
-          ),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _controller,
-            builder: (context, value, _) {
-              if (_saved.isEmpty || value.text.trim() == _saved) {
-                return const SizedBox.shrink();
-              }
-              return Padding(
-                padding: const EdgeInsets.only(top: AlimSpace.xs),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(AlimRadius.field),
-                  onTap: () {
-                    _controller.text = _saved;
-                    _controller.selection = TextSelection.collapsed(
-                      offset: _saved.length,
-                    );
-                    _gratitudeFocus.requestFocus();
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.check_circle_outline,
-                          size: 15,
-                          color: AlimColors.gold,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Saved for today: $_saved',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: AlimColors.mutedOf(context),
-                              fontSize: 12.5,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+          const Icon(Icons.favorite_outline, size: 18, color: AlimColors.rose),
+          const SizedBox(width: AlimSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'One line of gratitude',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  saved.isEmpty ? 'Tap to write' : saved,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AlimColors.mutedOf(context),
+                    fontSize: 12.5,
                   ),
                 ),
-              );
-            },
+              ],
+            ),
+          ),
+          Icon(
+            Icons.edit_outlined,
+            size: 18,
+            color: AlimColors.mutedOf(context),
           ),
         ],
       ),
     );
   }
+}
+
+/// The writing window for the day's gratitude: type, submit, it closes.
+Future<void> showGratitudeSheet(
+  BuildContext context,
+  WidgetRef ref,
+  String initial,
+) async {
+  final controller = TextEditingController(text: initial);
+  final saved = initial.trim();
+  final messenger = ScaffoldMessenger.of(context);
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder:
+        (sheetContext) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            AlimSpace.lg,
+            0,
+            AlimSpace.lg,
+            MediaQuery.viewInsetsOf(sheetContext).bottom + AlimSpace.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.favorite_outline,
+                    size: 18,
+                    color: AlimColors.rose,
+                  ),
+                  const SizedBox(width: AlimSpace.xs),
+                  Text(
+                    'One line of gratitude',
+                    style: Theme.of(sheetContext).textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AlimSpace.sm),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                minLines: 1,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  hintText: 'Today I am thankful for…',
+                  isDense: true,
+                ),
+                onSubmitted:
+                    (_) => _submitGratitude(
+                      sheetContext,
+                      ref,
+                      controller,
+                      saved,
+                      messenger,
+                    ),
+              ),
+              const SizedBox(height: AlimSpace.md),
+              FilledButton(
+                onPressed:
+                    () => _submitGratitude(
+                      sheetContext,
+                      ref,
+                      controller,
+                      saved,
+                      messenger,
+                    ),
+                child: const Text('Submit'),
+              ),
+              if (saved.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    controller.text = '';
+                    _submitGratitude(
+                      sheetContext,
+                      ref,
+                      controller,
+                      saved,
+                      messenger,
+                    );
+                  },
+                  child: const Text('Clear'),
+                ),
+            ],
+          ),
+        ),
+  );
+  controller.dispose();
+}
+
+Future<void> _submitGratitude(
+  BuildContext sheetContext,
+  WidgetRef ref,
+  TextEditingController controller,
+  String saved,
+  ScaffoldMessengerState messenger,
+) async {
+  final text = controller.text.trim();
+  if (text != saved) {
+    await ref.read(actionsProvider).setGratitude(text);
+  }
+  if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        text.isEmpty ? 'Gratitude cleared.' : 'Gratitude saved for today.',
+      ),
+      duration: const Duration(seconds: 3),
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
 }
 
 class _TaskTile extends StatelessWidget {
