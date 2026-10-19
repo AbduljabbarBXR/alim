@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models.dart';
 import '../services/audio.dart';
 import '../services/audio_downloads.dart';
+import '../services/notifications.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -130,6 +132,10 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
   }
 
   void _playPressed(SurahView view, Reciter reciter, AudioView audio) {
+    if (audio.failed) {
+      _startListening(view, reciter);
+      return;
+    }
     if (audio.surah == view.surah.number && audio.ayah != null) {
       ref.read(audioProvider.notifier).toggle();
       return;
@@ -183,6 +189,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
     bool downloaded,
   ) async {
     if (!downloaded) {
+      unawaited(Notifications.ensureDownloadPermission());
       await _offerDownload(view, reciter);
       return;
     }
@@ -534,7 +541,9 @@ class _SurahPanel extends StatelessWidget {
     final here = audio.surah == surahNumber && audio.ayah != null;
     final busy = task?.busy ?? false;
     final status =
-        downloaded
+        audio.failed && here
+            ? 'Could not play. Tap play to try again.'
+            : downloaded
             ? (within ? 'Saved · Ayah $local' : 'Saved · ready offline')
             : busy
             ? (task?.detail ?? 'Saving')
@@ -750,6 +759,7 @@ class _DownloadSheetState extends ConsumerState<_DownloadSheet> {
   @override
   void initState() {
     super.initState();
+    unawaited(Notifications.ensureDownloadPermission());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref
           .read(audioDownloadsProvider.notifier)
@@ -836,9 +846,25 @@ class _DownloadSheetState extends ConsumerState<_DownloadSheet> {
               ),
             ],
             const SizedBox(height: AlimSpace.md),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Stream instead'),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (!failed && (task?.busy ?? false))
+                  TextButton(
+                    onPressed: () {
+                      ref
+                          .read(audioDownloadsProvider.notifier)
+                          .stopSurah(widget.reciter.id, widget.surah);
+                    },
+                    child: const Text('Stop saving'),
+                  )
+                else
+                  const SizedBox.shrink(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Stream instead'),
+                ),
+              ],
             ),
           ],
         ),

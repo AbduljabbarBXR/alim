@@ -14,12 +14,27 @@ class Notifications {
 
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _ready = false;
+  static bool _askedDownloadPermission = false;
 
-  static const _channel = AndroidNotificationChannel(
-    'alim_daily',
+  /// The icon the system shows in the status bar. It must be a real drawable
+  /// resource; the launcher mipmap is not one, and an invalid icon makes every
+  /// notification fail silently.
+  static const _icon = 'alim_notification';
+
+  static const _dailyChannel = AndroidNotificationChannel(
+    'alim_daily_v2',
     'Daily reminder',
     description: 'A gentle nudge to keep the day\'s reading and dhikr.',
-    importance: Importance.defaultImportance,
+    importance: Importance.high,
+    playSound: true,
+  );
+
+  static const _downloadsChannel = AndroidNotificationChannel(
+    'alim_downloads',
+    'Downloads',
+    description: 'Progress while a surah or a whole voice is being saved.',
+    importance: Importance.low,
+    playSound: false,
   );
 
   static const _adhanShortChannel = AndroidNotificationChannel(
@@ -42,17 +57,11 @@ class Notifications {
 
   static Future<void> init() async {
     if (_ready) return;
-    try {
-      tzdata.initializeTimeZones();
-      final name = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(name));
-    } catch (_) {
-      // Fall back to UTC scheduling rather than not scheduling at all.
-    }
+    await _setLocalTime();
     try {
       await _plugin.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings(_icon),
         ),
       );
       final android =
@@ -60,13 +69,38 @@ class Notifications {
               .resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin
               >();
-      await android?.createNotificationChannel(_channel);
+      // The first daily channel was built silent and cannot be changed after
+      // the fact, so it is retired and replaced.
+      await android?.deleteNotificationChannel('alim_daily');
+      await android?.createNotificationChannel(_dailyChannel);
+      await android?.createNotificationChannel(_downloadsChannel);
       await android?.createNotificationChannel(_adhanShortChannel);
       await android?.createNotificationChannel(_adhanLongChannel);
       _ready = true;
     } catch (e) {
       debugPrint('alim: notifications unavailable: $e');
     }
+  }
+
+  /// The timezone database first, then the platform's zone by name, then a
+  /// fixed zone from the current offset, so the clock is never left in UTC.
+  static Future<void> _setLocalTime() async {
+    try {
+      tzdata.initializeTimeZones();
+    } catch (_) {
+      return;
+    }
+    try {
+      final name = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(name));
+      return;
+    } catch (_) {}
+    try {
+      final offset = DateTime.now().timeZoneOffset;
+      final hours = offset.inHours;
+      final sign = hours >= 0 ? '-' : '+';
+      tz.setLocalLocation(tz.getLocation('Etc/GMT$sign${hours.abs()}'));
+    } catch (_) {}
   }
 
   static Future<bool> requestPermission() async {
@@ -84,6 +118,43 @@ class Notifications {
     }
   }
 
+  /// Asked once per session, when a download starts, so its progress may show
+  /// in the shade.
+  static Future<void> ensureDownloadPermission() async {
+    if (_askedDownloadPermission) return;
+    _askedDownloadPermission = true;
+    await requestPermission();
+  }
+
+  static String _clock(int hour, int minute) =>
+      '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+
+  static NotificationDetails get _dailyDetails => const NotificationDetails(
+    android: AndroidNotificationDetails(
+      'alim_daily_v2',
+      'Daily reminder',
+      channelDescription:
+          'A gentle nudge to keep the day\'s reading and dhikr.',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      category: AndroidNotificationCategory.reminder,
+    ),
+  );
+
+  static Future<bool> _canExact() async {
+    try {
+      final android =
+          _plugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
+      return await android?.canScheduleExactNotifications() ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> scheduleDaily({
     required int hour,
     required int minute,
@@ -92,6 +163,7 @@ class Notifications {
     await init();
     try {
       await _plugin.cancel(1);
+      final exact = await _canExact();
       final now = tz.TZDateTime.now(tz.local);
       var when = tz.TZDateTime(
         tz.local,
@@ -107,17 +179,11 @@ class Notifications {
         'Alim',
         body,
         when,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'alim_daily',
-            'Daily reminder',
-            channelDescription:
-                'A gentle nudge to keep the day\'s reading and dhikr.',
-            importance: Importance.defaultImportance,
-            priority: Priority.defaultPriority,
-          ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        _dailyDetails,
+        androidScheduleMode:
+            exact
+                ? AndroidScheduleMode.exactAllowWhileIdle
+                : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
@@ -127,10 +193,67 @@ class Notifications {
     }
   }
 
+  /// A confirmation the moment the reminder is switched on, so the sound and
+  /// the look can be heard and seen right away.
+  static Future<void> remindSetNow({
+    required int hour,
+    required int minute,
+  }) async {
+    await init();
+    try {
+      await _plugin.show(
+        2,
+        'Reminder set',
+        'Alim will nudge you every day at ${_clock(hour, minute)}. '
+            'This is how it will sound.',
+        _dailyDetails,
+      );
+    } catch (_) {}
+  }
+
   static Future<void> cancelDaily() async {
     await init();
     try {
       await _plugin.cancel(1);
+    } catch (_) {}
+  }
+
+  /// Progress for a running download, kept silent and replaced as it moves.
+  static Future<void> downloadProgress({
+    required int percent,
+    required String body,
+  }) async {
+    await init();
+    try {
+      await _plugin.show(
+        77,
+        'Saving the Qur\'an',
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'alim_downloads',
+            'Downloads',
+            channelDescription:
+                'Progress while a surah or a whole voice is being saved.',
+            importance: Importance.low,
+            priority: Priority.low,
+            playSound: false,
+            onlyAlertOnce: true,
+            showProgress: true,
+            maxProgress: 100,
+            progress: percent.clamp(0, 100),
+            ongoing: true,
+            autoCancel: false,
+            icon: _icon,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> hideDownloadProgress() async {
+    try {
+      await _plugin.cancel(77);
     } catch (_) {}
   }
 
@@ -205,17 +328,7 @@ class Notifications {
       await cancelAdhan();
       return;
     }
-    var exact = false;
-    try {
-      final android =
-          _plugin
-              .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin
-              >();
-      exact = await android?.canScheduleExactNotifications() ?? false;
-    } catch (_) {
-      exact = false;
-    }
+    final exact = await _canExact();
     try {
       for (var id = 100; id <= 999; id++) {
         await _plugin.cancel(id);
@@ -262,19 +375,30 @@ class Notifications {
     } catch (_) {}
   }
 
-  /// A sample call, a few seconds from now.
+  /// A sample call, a few seconds from now: exact when Android allows it, and
+  /// straight to the shade otherwise, so it is never silently late.
   static Future<void> previewAdhan(String sound) async {
     await init();
     try {
-      await _plugin.zonedSchedule(
+      if (await _canExact()) {
+        await _plugin.zonedSchedule(
+          99,
+          'Adhan preview',
+          'This is how the call to prayer will sound.',
+          tz.TZDateTime.now(tz.local).add(const Duration(seconds: 5)),
+          NotificationDetails(android: _adhanDetails(sound)),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+        return;
+      }
+      await Future<void>.delayed(const Duration(seconds: 2));
+      await _plugin.show(
         99,
         'Adhan preview',
         'This is how the call to prayer will sound.',
-        tz.TZDateTime.now(tz.local).add(const Duration(seconds: 5)),
         NotificationDetails(android: _adhanDetails(sound)),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
       );
     } catch (e) {
       debugPrint('alim: could not preview the adhan: $e');

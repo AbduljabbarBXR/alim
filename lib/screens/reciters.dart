@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import '../services/audio.dart';
 import '../services/audio_downloads.dart';
+import '../services/notifications.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -130,8 +132,17 @@ class _RecitersScreenState extends ConsumerState<RecitersScreen> {
     await ref.read(audioProvider.notifier).stop();
     setState(() => _sampling = reciter.id);
     try {
+      // Every source needs a MediaItem when the background service is on,
+      // otherwise the player refuses to open it.
       await _preview.setAudioSource(
-        AudioSource.uri(Uri.parse(ayahAudioUrl(reciter, 1, 1)), tag: null),
+        AudioSource.uri(
+          Uri.parse(ayahAudioUrl(reciter, 1, 1)),
+          tag: MediaItem(
+            id: 'sample:${reciter.id}',
+            title: '${reciter.name} · Al-Faatiha 1',
+            album: 'Alim, sample of ${reciter.name}',
+          ),
+        ),
       );
       await _preview.play();
     } catch (_) {
@@ -139,7 +150,7 @@ class _RecitersScreenState extends ConsumerState<RecitersScreen> {
       setState(() => _sampling = null);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('The sample did not play. Check the connection.'),
+          content: Text('The sample did not play. Try again in a moment.'),
         ),
       );
     }
@@ -185,6 +196,7 @@ class _RecitersScreenState extends ConsumerState<RecitersScreen> {
           ),
     );
     if (ok != true) return;
+    unawaited(Notifications.ensureDownloadPermission());
     await downloads.downloadPack(reciter);
   }
 

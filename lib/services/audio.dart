@@ -202,7 +202,7 @@ class AyahAudio extends StateNotifier<AudioView> {
     int? startAyah,
     String? localDir,
   }) {
-    if (_surah == surahNumber && _reciter?.id == reciter.id) {
+    if (!state.failed && _surah == surahNumber && _reciter?.id == reciter.id) {
       return toggle();
     }
     return play(

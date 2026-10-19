@@ -500,6 +500,7 @@ class SettingsScreen extends ConsumerWidget {
                         }
                         return;
                       }
+                      await Notifications.requestExactAlarms();
                       await Notifications.scheduleDaily(
                         hour: profile.reminderHour,
                         minute: profile.reminderMinute,
@@ -507,6 +508,25 @@ class SettingsScreen extends ConsumerWidget {
                             'Your day has a few open pages. Qur\'an, a '
                             'hadith, a dhikr.',
                       );
+                      await Notifications.remindSetNow(
+                        hour: profile.reminderHour,
+                        minute: profile.reminderMinute,
+                      );
+                      if (context.mounted) {
+                        final h = profile.reminderHour.toString().padLeft(
+                          2,
+                          '0',
+                        );
+                        final m = profile.reminderMinute.toString().padLeft(
+                          2,
+                          '0',
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Reminder set for $h:$m, every day.'),
+                          ),
+                        );
+                      }
                     } else {
                       await Notifications.cancelDaily();
                     }
@@ -524,9 +544,9 @@ class SettingsScreen extends ConsumerWidget {
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     onTap: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: TimeOfDay(
+                      final picked = await showAlimTimePicker(
+                        context,
+                        TimeOfDay(
                           hour: profile.reminderHour,
                           minute: profile.reminderMinute,
                         ),
@@ -549,15 +569,18 @@ class SettingsScreen extends ConsumerWidget {
                     },
                   ),
                 ],
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.contrast),
-                  title: const Text('Theme'),
-                  subtitle: Text(_themeLabel(profile.themeMode)),
-                  trailing: const Icon(Icons.chevron_right, size: 19),
-                  onTap: () => _pickTheme(context, ref, profile),
-                ),
               ],
+            ),
+          ),
+          const SectionHeader('Appearance'),
+          AlimCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.contrast),
+              title: const Text('Theme'),
+              subtitle: Text(_themeLabel(profile.themeMode)),
+              trailing: const Icon(Icons.chevron_right, size: 19),
+              onTap: () => _pickTheme(context, ref, profile),
             ),
           ),
           const SectionHeader('Place and prayer'),

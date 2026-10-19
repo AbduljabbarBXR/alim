@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'audio.dart';
+import 'notifications.dart';
 
 /// The number of ayat in each surah, so a download knows when it is whole.
 const surahAyahCounts = <int>[
@@ -167,6 +168,25 @@ class DownloadTask {
   );
 }
 
+/// Raised inside a fetch when the person asked for the download to stop.
+class _Stopped implements Exception {
+  const _Stopped();
+}
+
+/// One download's right to keep running. The person stops it by flipping
+/// [aborted]; whoever started it can then wait for [done] before touching the
+/// same files again.
+class _Abort {
+  bool aborted = false;
+  final Completer<void> _done = Completer<void>();
+
+  Future<void> get done => _done.future;
+
+  void finish() {
+    if (!_done.isCompleted) _done.complete();
+  }
+}
+
 /// A readable size, so every progress line carries the weight of the file.
 String _mb(int bytes) {
   final value = bytes / (1024 * 1024);
@@ -183,9 +203,15 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
   static const _maxZipBytes = 40 * 1024 * 1024;
 
   final Set<String> _done = {};
-  final Set<String> _stopPacks = {};
+  final Map<String, _Abort> _aborts = {};
+  final Map<String, int> _activeSurah = {};
   String? _rootPath;
   HttpClient? _client;
+
+  /// The last shape of the download notification, so it is rewritten only when
+  /// it visibly changes.
+  int _lastNotifiedPercent = -1;
+  DateTime _lastNotifiedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// One client for every request, so a pack does not open a fresh connection
   /// for each of its hundreds of files.
@@ -292,7 +318,46 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
         }
       }
     }
-    if (changed) state = next;
+    if (changed) {
+      state = next;
+      _notify();
+    }
+  }
+
+  /// Keeps one silent notification in the shade with the download's name and
+  /// percentage while anything is still saving, and takes it away after.
+  void _notify() {
+    DownloadTask? chosen;
+    for (final entry in state.entries) {
+      final task = entry.value;
+      if (!task.busy) continue;
+      if (entry.key.endsWith('/all')) {
+        chosen = task;
+        break;
+      }
+      chosen ??= task;
+    }
+    if (chosen == null) {
+      if (_lastNotifiedPercent >= 0) {
+        _lastNotifiedPercent = -1;
+        unawaited(Notifications.hideDownloadProgress());
+      }
+      return;
+    }
+    final percent = (chosen.progress.clamp(0.0, 1.0) * 100).round();
+    final now = DateTime.now();
+    if (percent == _lastNotifiedPercent) return;
+    if (now.difference(_lastNotifiedAt) < const Duration(milliseconds: 700)) {
+      return;
+    }
+    _lastNotifiedPercent = percent;
+    _lastNotifiedAt = now;
+    unawaited(
+      Notifications.downloadProgress(
+        percent: percent,
+        body: chosen.detail ?? 'Downloading',
+      ),
+    );
   }
 
   void _remove(String key) {
@@ -308,6 +373,13 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
       _set(key, const DownloadTask(phase: DownloadPhase.done, progress: 1));
       return;
     }
+    final previous = _aborts[key];
+    if (previous != null) {
+      previous.aborted = true;
+      await previous.done;
+    }
+    final token = _Abort();
+    _aborts[key] = token;
     _set(
       key,
       const DownloadTask(phase: DownloadPhase.downloading, detail: 'Starting'),
@@ -315,22 +387,50 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
     final dir = await _surahDir(reciter.id, surah);
     try {
       final zipUrl = surahZipUrl(reciter, surah);
-      final size = await _remoteSize(zipUrl);
-      if (size != null && size > _maxZipBytes) {
-        await _downloadAyahs(reciter, surah, dir, key);
+      final size = await _remoteSize(zipUrl, token);
+      if (size == null || size > _maxZipBytes) {
+        await _downloadAyahs(reciter, surah, dir, key, token);
       } else {
-        await _downloadZip(reciter, surah, dir, key, zipUrl);
+        await _downloadZip(reciter, surah, dir, key, zipUrl, token);
       }
+      if (token.aborted) throw const _Stopped();
       await File('${dir.path}/.complete').writeAsString('1', flush: true);
       _done.add(key);
       _set(key, const DownloadTask(phase: DownloadPhase.done, progress: 1));
-    } catch (error) {
+    } on _Stopped {
+      _set(
+        key,
+        const DownloadTask(
+          phase: DownloadPhase.failed,
+          error: 'Download stopped.',
+        ),
+      );
+    } catch (_) {
       _set(
         key,
         DownloadTask(
           phase: DownloadPhase.failed,
           error:
-              'Could not download $surah. Check the connection and try again.',
+              'Could not save surah $surah. Check the connection and try again.',
+        ),
+      );
+    } finally {
+      token.finish();
+      if (identical(_aborts[key], token)) _aborts.remove(key);
+      _notify();
+    }
+  }
+
+  /// Asks the running download of one surah to stop; the sheet's Stop button.
+  Future<void> stopSurah(String reciterId, int surah) async {
+    final key = _key(reciterId, surah);
+    _aborts[key]?.aborted = true;
+    if (state[key]?.busy ?? false) {
+      _set(
+        key,
+        const DownloadTask(
+          phase: DownloadPhase.failed,
+          error: 'Download stopped.',
         ),
       );
     }
@@ -342,12 +442,14 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
     Directory dir,
     String key,
     String url,
+    _Abort token,
   ) async {
     final temp = File('${dir.path}/surah.zip');
     try {
       await _fetch(
         url,
         temp,
+        abort: token,
         onProgress:
             (received, total) => _set(
               key,
@@ -394,6 +496,7 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
     int surah,
     Directory dir,
     String key,
+    _Abort token,
   ) async {
     final count = surahAyahCounts[surah - 1];
     final pending = <int>[];
@@ -430,23 +533,42 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
     var next = 0;
     Future<void> worker() async {
       while (true) {
-        if (next >= pending.length) return;
+        if (token.aborted || next >= pending.length) return;
         final ayah = pending[next++];
         final target = File(localAyahPath(dir.path, surah, ayah));
         final part = File('${target.path}.part');
+        var attempts = 0;
         try {
-          await _fetch(
-            ayahAudioUrl(reciter, surah, ayah),
-            part,
-            onProgress: (received, _) {
-              inFlight[ayah] = received;
-              report();
-            },
-          );
+          while (true) {
+            try {
+              await _fetch(
+                ayahAudioUrl(reciter, surah, ayah),
+                part,
+                abort: token,
+                onProgress: (received, _) {
+                  inFlight[ayah] = received;
+                  report();
+                },
+              );
+              break;
+            } catch (error) {
+              if (error is _Stopped) rethrow;
+              attempts++;
+              if (attempts >= 2 || token.aborted) rethrow;
+              await Future<void>.delayed(const Duration(seconds: 1));
+            }
+          }
+          await part.rename(target.path);
+        } on _Stopped {
+          if (await part.exists()) {
+            try {
+              await part.delete();
+            } catch (_) {}
+          }
+          return;
         } finally {
           inFlight.remove(ayah);
         }
-        await part.rename(target.path);
         done++;
         bytes += await target.length();
         report();
@@ -456,13 +578,16 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
     // Three files at a time: enough to keep the line busy without hammering
     // the server or memory.
     await Future.wait([for (var w = 0; w < 3; w++) worker()]);
+    if (token.aborted) throw const _Stopped();
   }
 
-  Future<int?> _remoteSize(String url) async {
+  Future<int?> _remoteSize(String url, _Abort token) async {
     try {
+      if (token.aborted) throw const _Stopped();
       final request = await _http.headUrl(Uri.parse(url));
       final response = await request.close();
       await response.drain<void>();
+      if (token.aborted) throw const _Stopped();
       if (response.statusCode != HttpStatus.ok) return null;
       return response.contentLength >= 0 ? response.contentLength : null;
     } catch (_) {
@@ -473,8 +598,10 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
   Future<void> _fetch(
     String url,
     File target, {
+    _Abort? abort,
     void Function(int received, int total)? onProgress,
   }) async {
+    if (abort != null && abort.aborted) throw const _Stopped();
     final request = await _http.getUrl(Uri.parse(url));
     final response = await request.close();
     if (response.statusCode != HttpStatus.ok) {
@@ -486,6 +613,7 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
     var received = 0;
     try {
       await for (final chunk in response) {
+        if (abort != null && abort.aborted) throw const _Stopped();
         sink.add(chunk);
         received += chunk.length;
         if (onProgress != null) {
@@ -501,14 +629,20 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
   Future<void> downloadPack(Reciter reciter, {void Function()? onDone}) async {
     final key = '${reciter.id}/all';
     if (state[key]?.busy ?? false) return;
-    _stopPacks.remove(reciter.id);
+    final previous = _aborts[key];
+    if (previous != null) {
+      previous.aborted = true;
+      await previous.done;
+    }
+    final token = _Abort();
+    _aborts[key] = token;
     _set(
       key,
       const DownloadTask(phase: DownloadPhase.downloading, detail: 'Starting'),
     );
     try {
       for (var surah = 1; surah <= 114; surah++) {
-        if (_stopPacks.remove(reciter.id)) {
+        if (token.aborted) {
           _set(
             key,
             const DownloadTask(
@@ -519,7 +653,19 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
           return;
         }
         if (!isSurahDownloaded(reciter.id, surah)) {
+          _activeSurah[reciter.id] = surah;
           await downloadSurah(reciter, surah);
+          _activeSurah.remove(reciter.id);
+          if (token.aborted) {
+            _set(
+              key,
+              const DownloadTask(
+                phase: DownloadPhase.failed,
+                error: 'Download stopped.',
+              ),
+            );
+            return;
+          }
           final child = state[_key(reciter.id, surah)];
           if (child?.phase == DownloadPhase.failed) {
             throw StateError('Surah $surah stopped the pack.');
@@ -544,15 +690,36 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
           error: 'The pack stopped early. Tap to pick it up again.',
         ),
       );
+    } finally {
+      token.finish();
+      if (identical(_aborts[key], token)) _aborts.remove(key);
+      _activeSurah.remove(reciter.id);
+      _notify();
     }
   }
 
+  /// Stops a running pack at once, including the surah being saved.
   Future<void> stopPack(String reciterId) async {
-    _stopPacks.add(reciterId);
+    _aborts['$reciterId/all']?.aborted = true;
+    final active = _activeSurah[reciterId];
+    if (active != null) {
+      _aborts[_key(reciterId, active)]?.aborted = true;
+    }
+    final key = '$reciterId/all';
+    if (state[key]?.busy ?? false) {
+      _set(
+        key,
+        const DownloadTask(
+          phase: DownloadPhase.failed,
+          error: 'Download stopped.',
+        ),
+      );
+    }
   }
 
   Future<void> deleteSurah(String reciterId, int surah) async {
     final key = _key(reciterId, surah);
+    _aborts[key]?.aborted = true;
     _done.remove(key);
     _remove(key);
     try {

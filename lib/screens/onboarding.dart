@@ -279,10 +279,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
               ),
               onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: _reminderTime,
-                );
+                final picked = await showAlimTimePicker(context, _reminderTime);
                 if (picked != null) setState(() => _reminderTime = picked);
               },
             ),

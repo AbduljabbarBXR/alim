@@ -45,8 +45,6 @@ class TodayScreen extends ConsumerWidget {
               _header(context, now, stats.valueOrNull),
               const SizedBox(height: AlimSpace.md),
               _tasksCard(context, ref, taskList, logValue),
-              const SizedBox(height: AlimSpace.md),
-              GratitudeField(initial: logValue?.gratitude ?? ''),
               const SectionHeader('Verse of the day'),
               if (verse.valueOrNull != null)
                 _verseCard(context, ref, verse.value!),
@@ -429,58 +427,6 @@ class TodayScreen extends ConsumerWidget {
       default:
         return id;
     }
-  }
-}
-
-/// A single line that carries the day's gratitude, opening a small writing
-/// window when tapped.
-class GratitudeField extends ConsumerWidget {
-  const GratitudeField({super.key, required this.initial});
-
-  final String initial;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final saved = initial.trim();
-    return AlimCard(
-      onTap: () => showGratitudeSheet(context, ref, saved),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AlimSpace.md,
-        vertical: AlimSpace.sm,
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.favorite_outline, size: 18, color: AlimColors.rose),
-          const SizedBox(width: AlimSpace.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'One line of gratitude',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  saved.isEmpty ? 'Tap to write' : saved,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AlimColors.mutedOf(context),
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.edit_outlined,
-            size: 18,
-            color: AlimColors.mutedOf(context),
-          ),
-        ],
-      ),
-    );
   }
 }
 

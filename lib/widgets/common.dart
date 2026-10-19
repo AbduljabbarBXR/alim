@@ -499,3 +499,172 @@ class BismillahBand extends StatelessWidget {
     );
   }
 }
+
+/// A time picker of Alim's own: every hour 01 to 12, every minute 00 to 59,
+/// with a clear morning or evening choice.
+Future<TimeOfDay?> showAlimTimePicker(BuildContext context, TimeOfDay initial) {
+  return showModalBottomSheet<TimeOfDay>(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => _AlimTimePickerSheet(initial: initial),
+  );
+}
+
+class _AlimTimePickerSheet extends StatefulWidget {
+  const _AlimTimePickerSheet({required this.initial});
+
+  final TimeOfDay initial;
+
+  @override
+  State<_AlimTimePickerSheet> createState() => _AlimTimePickerSheetState();
+}
+
+class _AlimTimePickerSheetState extends State<_AlimTimePickerSheet> {
+  late int _hour =
+      widget.initial.hour % 12 == 0 ? 12 : widget.initial.hour % 12;
+  late int _minute = widget.initial.minute;
+  late bool _evening = widget.initial.hour >= 12;
+
+  TimeOfDay get _value => TimeOfDay(
+    hour: _evening ? (_hour % 12) + 12 : _hour % 12,
+    minute: _minute,
+  );
+
+  String get _label {
+    final hour = _value.hourOfPeriod == 0 ? 12 : _value.hourOfPeriod;
+    final part = _value.period == DayPeriod.am ? 'AM' : 'PM';
+    return '${hour.toString().padLeft(2, '0')}:'
+        '${_value.minute.toString().padLeft(2, '0')} $part';
+  }
+
+  Widget _pickBox(BuildContext context, String label, Widget child) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: AlimColors.mutedOf(context), fontSize: 12),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AlimSpace.sm,
+            vertical: 2,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AlimRadius.field),
+            border: Border.all(color: AlimColors.hairlineOf(context)),
+          ),
+          child: child,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const itemStyle = TextStyle(fontSize: 15, fontWeight: FontWeight.w600);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AlimSpace.lg,
+          0,
+          AlimSpace.lg,
+          AlimSpace.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'The hour of the reminder',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: AlimSpace.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: _pickBox(
+                    context,
+                    'Hour',
+                    DropdownButton<int>(
+                      value: _hour,
+                      isExpanded: true,
+                      underline: const SizedBox.shrink(),
+                      menuMaxHeight: 320,
+                      items: [
+                        for (var h = 1; h <= 12; h++)
+                          DropdownMenuItem(
+                            value: h,
+                            child: Text(
+                              h.toString().padLeft(2, '0'),
+                              style: itemStyle,
+                            ),
+                          ),
+                      ],
+                      onChanged: (v) => setState(() => _hour = v ?? _hour),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AlimSpace.sm),
+                Expanded(
+                  child: _pickBox(
+                    context,
+                    'Minute',
+                    DropdownButton<int>(
+                      value: _minute,
+                      isExpanded: true,
+                      underline: const SizedBox.shrink(),
+                      menuMaxHeight: 320,
+                      items: [
+                        for (var m = 0; m < 60; m++)
+                          DropdownMenuItem(
+                            value: m,
+                            child: Text(
+                              m.toString().padLeft(2, '0'),
+                              style: itemStyle,
+                            ),
+                          ),
+                      ],
+                      onChanged: (v) => setState(() => _minute = v ?? _minute),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AlimSpace.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: false, label: Text('AM')),
+                  ButtonSegment(value: true, label: Text('PM')),
+                ],
+                selected: {_evening},
+                showSelectedIcon: false,
+                onSelectionChanged:
+                    (choice) => setState(() => _evening = choice.first),
+              ),
+            ),
+            const SizedBox(height: AlimSpace.md),
+            Text(
+              'Reminder at $_label',
+              style: TextStyle(
+                color: AlimColors.mutedOf(context),
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: AlimSpace.md),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(_value),
+              child: const Text('Set the time'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

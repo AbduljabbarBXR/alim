@@ -68,7 +68,9 @@ class _BootRootState extends State<BootRoot> {
       onboarded = false;
     }
     await Notifications.init();
+    await Notifications.hideDownloadProgress();
     await _restoreAdhan(store);
+    await _restoreReminder(store);
     final left = const Duration(seconds: 3) - watch.elapsed;
     if (left > Duration.zero) await Future<void>.delayed(left);
     return _Ready(store, onboarded);
@@ -100,6 +102,24 @@ class _BootRootState extends State<BootRoot> {
       );
     } catch (_) {
       // A missing fix or an odd profile just leaves the adhan quiet.
+    }
+  }
+
+  /// Writes the daily reminder again on every open, so a lost alarm is
+  /// quietly put back in place.
+  Future<void> _restoreReminder(AlimStore store) async {
+    try {
+      final rawProfile = await store.kvGet('profile');
+      if (rawProfile == null) return;
+      final profile = jsonDecode(rawProfile) as Map<String, dynamic>;
+      if (profile['reminderOn'] != true) return;
+      await Notifications.scheduleDaily(
+        hour: profile['reminderHour'] as int? ?? 20,
+        minute: profile['reminderMinute'] as int? ?? 0,
+        body: 'Your day has a few open pages. Qur\'an, a hadith, a dhikr.',
+      );
+    } catch (_) {
+      // A reminder that cannot be written leaves the app working.
     }
   }
 
