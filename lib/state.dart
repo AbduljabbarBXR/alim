@@ -8,6 +8,7 @@ import 'services/audio.dart';
 import 'models.dart';
 import 'services/daily.dart';
 import 'services/location.dart';
+import 'services/notifications.dart';
 import 'services/prayer.dart';
 
 /// The store is built in main() and injected here.
@@ -60,7 +61,15 @@ class ProfileNotifier extends StateNotifier<Profile> {
         translation: m['translation'] as String? ?? 'sahih',
         arabicScale: (m['arabicScale'] as num?)?.toDouble() ?? 1.0,
         darkMode: m['darkMode'] as bool? ?? false,
+        themeMode:
+            m['themeMode'] as String? ??
+            ((m['darkMode'] as bool? ?? false) ? 'dark' : 'system'),
         reciter: m['reciter'] as String? ?? 'alafasy',
+        downloadBeforePlay: m['downloadBeforePlay'] as bool? ?? true,
+        adhanOn: m['adhanOn'] as bool? ?? false,
+        adhanSound: m['adhanSound'] as String? ?? 'short',
+        adhanPrayers:
+            m['adhanPrayers'] as String? ?? 'fajr,dhuhr,asr,maghrib,isha',
         reminderHour: m['reminderHour'] as int? ?? 20,
         reminderMinute: m['reminderMinute'] as int? ?? 0,
         reminderOn: m['reminderOn'] as bool? ?? false,
@@ -85,6 +94,12 @@ class ProfileNotifier extends StateNotifier<Profile> {
         'translation': next.translation,
         'arabicScale': next.arabicScale,
         'darkMode': next.darkMode,
+        'themeMode': next.themeMode,
+        'reciter': next.reciter,
+        'downloadBeforePlay': next.downloadBeforePlay,
+        'adhanOn': next.adhanOn,
+        'adhanSound': next.adhanSound,
+        'adhanPrayers': next.adhanPrayers,
         'reminderHour': next.reminderHour,
         'reminderMinute': next.reminderMinute,
         'reminderOn': next.reminderOn,
@@ -353,12 +368,13 @@ final storyReadProvider = FutureProvider.family<bool, int>((ref, id) async {
   return raw != null;
 });
 
-/// Global ayah numbers counted today.
-final readSetProvider = FutureProvider<Set<int>>((ref) async {
+/// Global ayah numbers counted today, keyed as surah:ayah so the same ayah
+/// number in another surah never collides.
+final readSetProvider = FutureProvider<Set<String>>((ref) async {
   ref.watch(revisionProvider);
   final date = dayKey(ref.watch(todayProvider));
   final raw = await ref.watch(storeProvider).kvGet('read_set_$date') ?? '';
-  return raw.split(',').where((s) => s.isNotEmpty).map(int.parse).toSet();
+  return raw.split(',').where((s) => s.isNotEmpty).toSet();
 });
 
 /// Hadith ids counted as learned today, so each hadith counts once per day.
@@ -371,6 +387,8 @@ final hadithReadSetProvider = FutureProvider<Set<int>>((ref) async {
 });
 
 // ---------------------------------------------------------------- actions
+
+Future<AlimLocation>? _locateInFlight;
 
 class AlimActions {
   AlimActions(this._ref);
@@ -474,22 +492,23 @@ class AlimActions {
     await _settle(before);
   }
 
-  /// Marks an ayah as read today. Returns true when this is the first time
-  /// today, so the caller can animate.
-  Future<bool> markAyahRead(int ayahNumber) async {
+  /// Marks an ayah as read today. Returns a short milestone line when this
+  /// reading crossed a meaningful count, otherwise null.
+  Future<String?> markAyahRead({required int surah, required int ayah}) async {
     final key = 'read_set_$_today';
     final raw = await _store.kvGet(key) ?? '';
     final read = raw.split(',').where((s) => s.isNotEmpty).toSet();
-    if (read.contains('$ayahNumber')) {
+    final token = '$surah:$ayah';
+    if (read.contains(token)) {
       _bump();
-      return false;
+      return null;
     }
-    read.add('$ayahNumber');
+    read.add(token);
     await _store.kvSet(key, read.join(','));
     final before = await _logNow();
     await _store.addVerses(_today, 1);
     await _settle(before);
-    return true;
+    return readMilestone(read.length);
   }
 
   Future<void> setLastRead(int ayahNumber) async {
@@ -499,11 +518,53 @@ class AlimActions {
 
   /// Reads a fresh fix and remembers it. Throws [LocationProblemException]
   /// when the service is off, the permission is refused, or no fix arrives.
-  Future<AlimLocation> locate() async {
+  /// Concurrent callers share one request so the system dialog is not
+  /// raised twice.
+  Future<AlimLocation> locate() {
+    final pending = _locateInFlight;
+    if (pending != null) return pending;
+    final future = _locateOnce();
+    _locateInFlight = future;
+    return future.whenComplete(() => _locateInFlight = null);
+  }
+
+  Future<AlimLocation> _locateOnce() async {
     final place = await LocationService.current();
     await _store.kvSet('location', '${place.latitude},${place.longitude}');
     _bump();
     return place;
+  }
+
+  /// Turns the call to prayer on or off. Returns a message for the person
+  /// when something has to be fixed first, otherwise null.
+  Future<String?> setAdhan(bool on) async {
+    final profile = _profile;
+    if (!on) {
+      await Notifications.cancelAdhan();
+      await _ref
+          .read(profileProvider.notifier)
+          .save(profile.copyWith(adhanOn: false));
+      _bump();
+      return null;
+    }
+    final place = _ref.read(locationProvider).valueOrNull;
+    if (place == null) {
+      return 'Set your location first. The adhan follows your prayer times.';
+    }
+    final granted = await Notifications.requestPermission();
+    if (!granted) return 'Android refused the notification permission.';
+    await Notifications.requestExactAlarms();
+    final next = profile.copyWith(adhanOn: true);
+    await _ref.read(profileProvider.notifier).save(next);
+    await Notifications.scheduleAdhan(
+      place: place,
+      method: next.prayerMethod,
+      asrHanafi: next.asrHanafi,
+      sound: next.adhanSound,
+      prayers: Notifications.prayersFromCsv(next.adhanPrayers),
+    );
+    _bump();
+    return null;
   }
 
   Future<void> forgetLocation() async {

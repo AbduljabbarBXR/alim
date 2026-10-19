@@ -92,6 +92,12 @@ ThemeData buildAlimTheme(Brightness brightness) {
     colorScheme: scheme,
     scaffoldBackgroundColor: Colors.transparent,
     fontFamily: 'Roboto',
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      },
+    ),
   );
 
   final muted = dark ? AlimColors.nightMuted : AlimColors.muted;

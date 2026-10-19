@@ -4,23 +4,20 @@ import 'package:alim/data/store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 DayLog blank(DateTime date) => DayLog(
-      date: '2026-01-05',
-      verses: 0,
-      hadiths: 0,
-      stories: 0,
-      dhikr: 0,
-      xp: 0,
-      tasks: const {},
-      gratitude: '',
-    );
+  date: '2026-01-05',
+  verses: 0,
+  hadiths: 0,
+  stories: 0,
+  dhikr: 0,
+  xp: 0,
+  tasks: const {},
+  gratitude: '',
+);
 
 void main() {
   group('daily tasks', () {
     test('a day has five tasks and the Qur\'an goal is the profile goal', () {
-      final tasks = buildDailyTasks(
-        date: DateTime(2026, 1, 5),
-        versesGoal: 5,
-      );
+      final tasks = buildDailyTasks(date: DateTime(2026, 1, 5), versesGoal: 5);
       expect(tasks, hasLength(5));
       expect(tasks[0].kind, DailyTaskKind.quran);
       expect(tasks[0].title, 'Read 5 ayat');
@@ -37,7 +34,10 @@ void main() {
     test('the rotating task follows the weekday', () {
       final monday = buildDailyTasks(date: DateTime(2026, 1, 5), versesGoal: 5);
       final friday = buildDailyTasks(date: DateTime(2026, 1, 9), versesGoal: 5);
-      final sunday = buildDailyTasks(date: DateTime(2026, 1, 11), versesGoal: 5);
+      final sunday = buildDailyTasks(
+        date: DateTime(2026, 1, 11),
+        versesGoal: 5,
+      );
       expect(monday.last.id, 'rot-mon');
       expect(monday.last.kind, DailyTaskKind.manual);
       expect(friday.last.id, 'rot-fri');
@@ -46,8 +46,7 @@ void main() {
     });
 
     test('a single-ayah goal reads naturally', () {
-      final tasks =
-          buildDailyTasks(date: DateTime(2026, 1, 5), versesGoal: 1);
+      final tasks = buildDailyTasks(date: DateTime(2026, 1, 5), versesGoal: 1);
       expect(tasks.first.title, 'Read 1 ayah');
     });
 
@@ -169,10 +168,10 @@ void main() {
       expect(verseOfDayRefs, contains(a));
     });
 
-    test('the greeting follows the hour', () {
-      expect(greetingFor(DateTime(2026, 1, 1, 3)), 'Peace in the night');
+    test('the greeting is the same salaam at every hour', () {
+      expect(greetingFor(DateTime(2026, 1, 1, 3)), 'Peace be upon you');
       expect(greetingFor(DateTime(2026, 1, 1, 9)), 'Peace be upon you');
-      expect(greetingFor(DateTime(2026, 1, 1, 21)), 'Peace tonight');
+      expect(greetingFor(DateTime(2026, 1, 1, 21)), 'Peace be upon you');
     });
   });
 
@@ -212,14 +211,13 @@ DayLog _with(
   int? xp,
   String? gratitude,
   Set<String>? tasks,
-}) =>
-    DayLog(
-      date: base.date,
-      verses: verses ?? base.verses,
-      hadiths: hadiths ?? base.hadiths,
-      stories: stories ?? base.stories,
-      dhikr: dhikr ?? base.dhikr,
-      xp: xp ?? base.xp,
-      tasks: tasks ?? base.tasks,
-      gratitude: gratitude ?? base.gratitude,
-    );
+}) => DayLog(
+  date: base.date,
+  verses: verses ?? base.verses,
+  hadiths: hadiths ?? base.hadiths,
+  stories: stories ?? base.stories,
+  dhikr: dhikr ?? base.dhikr,
+  xp: xp ?? base.xp,
+  tasks: tasks ?? base.tasks,
+  gratitude: gratitude ?? base.gratitude,
+);

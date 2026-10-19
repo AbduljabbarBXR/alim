@@ -7,11 +7,13 @@ import '../services/companion.dart';
 import '../services/notifications.dart';
 import '../state.dart';
 import '../theme.dart';
+import '../services/prayer.dart';
 import '../widgets/common.dart';
 import 'companion.dart';
 import 'onboarding.dart';
 import 'prayer.dart';
 import 'qibla.dart';
+import 'reciters.dart';
 
 String _translationLabel(WidgetRef ref, String slug) {
   final items = ref.watch(translationsProvider).valueOrNull;
@@ -98,74 +100,223 @@ Future<void> _pickTranslation(
   );
 }
 
-Future<void> _pickReciter(
+String _themeLabel(String mode) {
+  switch (mode) {
+    case 'light':
+      return 'Light, always';
+    case 'dark':
+      return 'Dark, always';
+    default:
+      return 'Follow the phone';
+  }
+}
+
+String _adhanSoundLabel(String sound) =>
+    sound == 'long'
+        ? 'Adhan, full (2 and a half minutes)'
+        : 'Adhan, short (42 seconds)';
+
+Future<void> _rescheduleAdhan(WidgetRef ref, Profile profile) async {
+  if (!profile.adhanOn) return;
+  final place = ref.read(locationProvider).valueOrNull;
+  if (place == null) return;
+  await Notifications.scheduleAdhan(
+    place: place,
+    method: profile.prayerMethod,
+    asrHanafi: profile.asrHanafi,
+    sound: profile.adhanSound,
+    prayers: Notifications.prayersFromCsv(profile.adhanPrayers),
+  );
+}
+
+Future<void> _toggleAdhan(
+  BuildContext context,
+  WidgetRef ref,
+  Profile profile,
+  bool on,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final problem = await ref.read(actionsProvider).setAdhan(on);
+  if (problem != null) {
+    messenger.showSnackBar(SnackBar(content: Text(problem)));
+    return;
+  }
+  if (on) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('The adhan will sound at each prayer time.'),
+      ),
+    );
+  }
+}
+
+Future<void> _toggleAdhanPrayer(
+  BuildContext context,
+  WidgetRef ref,
+  Profile profile,
+  AlimPrayer prayer,
+  bool on,
+) async {
+  final chosen = Notifications.prayersFromCsv(profile.adhanPrayers).toSet();
+  if (on) {
+    chosen.add(prayer);
+  } else {
+    chosen.remove(prayer);
+  }
+  final prayers = [
+    for (final p in Notifications.adhanPrayers)
+      if (chosen.contains(p)) p,
+  ];
+  if (prayers.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Keep at least one prayer, or turn the adhan off.'),
+      ),
+    );
+    return;
+  }
+  final next = profile.copyWith(
+    adhanPrayers: Notifications.prayersToCsv(prayers),
+  );
+  await ref.read(actionsProvider).saveProfile(next);
+  await _rescheduleAdhan(ref, next);
+}
+
+Future<void> _pickAdhanSound(
   BuildContext context,
   WidgetRef ref,
   Profile profile,
 ) async {
+  const options = [
+    ('short', 'Adhan, short', 'About 42 seconds'),
+    ('long', 'Adhan, full', 'About two and a half minutes'),
+  ];
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
-    isScrollControlled: true,
     builder:
         (sheetContext) => SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: AlimSpace.md),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AlimSpace.lg,
-                    0,
-                    AlimSpace.lg,
-                    AlimSpace.xs,
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AlimSpace.lg,
+                  0,
+                  AlimSpace.lg,
+                  AlimSpace.xs,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
                   child: Text(
-                    'Reciter',
+                    'Adhan sound',
                     style: Theme.of(sheetContext).textTheme.titleMedium,
                   ),
                 ),
-                for (final r in reciters)
-                  ListTile(
-                    leading: Icon(
-                      r.id == profile.reciter
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_off,
-                      color:
-                          r.id == profile.reciter
-                              ? AlimColors.gold
-                              : AlimColors.mutedOf(sheetContext),
-                    ),
-                    title: Text(r.name),
-                    subtitle: const Text('64 kbps'),
-                    onTap: () async {
-                      await ref
-                          .read(actionsProvider)
-                          .saveProfile(profile.copyWith(reciter: r.id));
-                      if (sheetContext.mounted) {
-                        Navigator.of(sheetContext).pop();
-                      }
+              ),
+              for (final option in options)
+                ListTile(
+                  leading: Icon(
+                    option.$1 == profile.adhanSound
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    color:
+                        option.$1 == profile.adhanSound
+                            ? AlimColors.gold
+                            : AlimColors.mutedOf(sheetContext),
+                  ),
+                  title: Text(option.$2),
+                  subtitle: Text(option.$3),
+                  trailing: IconButton(
+                    tooltip: 'Preview',
+                    icon: const Icon(Icons.play_circle_outline),
+                    onPressed: () {
+                      Notifications.previewAdhan(option.$1);
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'A preview will arrive in a few seconds.',
+                          ),
+                        ),
+                      );
                     },
                   ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AlimSpace.lg,
-                    AlimSpace.xs,
-                    AlimSpace.lg,
-                    0,
-                  ),
+                  onTap: () async {
+                    final next = profile.copyWith(adhanSound: option.$1);
+                    await ref.read(actionsProvider).saveProfile(next);
+                    if (sheetContext.mounted) {
+                      Navigator.of(sheetContext).pop();
+                    }
+                    await _rescheduleAdhan(ref, next);
+                  },
+                ),
+              const SizedBox(height: AlimSpace.sm),
+            ],
+          ),
+        ),
+  );
+}
+
+Future<void> _pickTheme(
+  BuildContext context,
+  WidgetRef ref,
+  Profile profile,
+) async {
+  const options = [
+    ('system', 'Follow the phone', 'Light or dark, like the rest of Android'),
+    ('light', 'Light', 'The parchment palette, day and night'),
+    ('dark', 'Dark', 'The night palette, always'),
+  ];
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder:
+        (sheetContext) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AlimSpace.lg,
+                  0,
+                  AlimSpace.lg,
+                  AlimSpace.xs,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
                   child: Text(
-                    'Recordings from everyayah.com.',
-                    style: TextStyle(
-                      color: AlimColors.mutedOf(sheetContext),
-                      fontSize: 12.5,
-                    ),
+                    'Theme',
+                    style: Theme.of(sheetContext).textTheme.titleMedium,
                   ),
                 ),
-              ],
-            ),
+              ),
+              for (final option in options)
+                ListTile(
+                  leading: Icon(
+                    option.$1 == profile.themeMode
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    color:
+                        option.$1 == profile.themeMode
+                            ? AlimColors.gold
+                            : AlimColors.mutedOf(sheetContext),
+                  ),
+                  title: Text(option.$2),
+                  subtitle: Text(option.$3),
+                  onTap: () async {
+                    await ref
+                        .read(actionsProvider)
+                        .saveProfile(
+                          profile.copyWith(
+                            themeMode: option.$1,
+                            darkMode: option.$1 == 'dark',
+                          ),
+                        );
+                    if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                  },
+                ),
+              const SizedBox(height: AlimSpace.sm),
+            ],
           ),
         ),
   );
@@ -283,15 +434,42 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Reciter'),
                   subtitle: Text(reciterById(profile.reciter).name),
                   trailing: const Icon(Icons.chevron_right, size: 19),
-                  onTap: () => _pickReciter(context, ref, profile),
+                  onTap: () => showReciterPicker(context, ref),
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  secondary: const Icon(Icons.download_for_offline_outlined),
+                  title: const Text('Download before playing'),
+                  subtitle: const Text(
+                    'Save the surah, then listen without a connection',
+                  ),
+                  value: profile.downloadBeforePlay,
+                  onChanged:
+                      (v) => actions.saveProfile(
+                        profile.copyWith(downloadBeforePlay: v),
+                      ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.storefront_outlined),
+                  title: const Text('Browse voices'),
+                  subtitle: const Text(
+                    'Samples, styles and full offline packs',
+                  ),
+                  trailing: const Icon(Icons.chevron_right, size: 19),
+                  onTap:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const RecitersScreen(),
+                        ),
+                      ),
                 ),
                 const Divider(height: 1),
                 const ListTile(
                   leading: Icon(Icons.wifi_outlined),
                   title: Text('Streaming audio'),
                   subtitle: Text(
-                    'Ayah by ayah, 64 kbps, played from everyayah.com. '
-                    'Needs a connection.',
+                    'Ayah by ayah from everyayah.com. No download needed.',
                   ),
                 ),
               ],
@@ -372,13 +550,12 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ],
                 const Divider(height: 1),
-                SwitchListTile(
-                  secondary: const Icon(Icons.dark_mode_outlined),
-                  title: const Text('Dark mode'),
-                  subtitle: const Text('A darker palette for late hours'),
-                  value: profile.darkMode,
-                  onChanged:
-                      (v) => actions.saveProfile(profile.copyWith(darkMode: v)),
+                ListTile(
+                  leading: const Icon(Icons.contrast),
+                  title: const Text('Theme'),
+                  subtitle: Text(_themeLabel(profile.themeMode)),
+                  trailing: const Icon(Icons.chevron_right, size: 19),
+                  onTap: () => _pickTheme(context, ref, profile),
                 ),
               ],
             ),
@@ -424,6 +601,56 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
           ),
+          const SectionHeader('Adhan'),
+          AlimCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.campaign_outlined),
+                  title: const Text('Call to prayer'),
+                  subtitle: const Text('The adhan sounds at each prayer time'),
+                  value: profile.adhanOn,
+                  onChanged: (v) => _toggleAdhan(context, ref, profile, v),
+                ),
+                if (profile.adhanOn) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.music_note_outlined),
+                    title: const Text('Adhan sound'),
+                    subtitle: Text(_adhanSoundLabel(profile.adhanSound)),
+                    trailing: const Icon(Icons.chevron_right, size: 19),
+                    onTap: () => _pickAdhanSound(context, ref, profile),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (final prayer in Notifications.adhanPrayers)
+                          FilterChip(
+                            label: Text(prayerLabel(prayer)),
+                            selected: Notifications.prayersFromCsv(
+                              profile.adhanPrayers,
+                            ).contains(prayer),
+                            onSelected:
+                                (on) => _toggleAdhanPrayer(
+                                  context,
+                                  ref,
+                                  profile,
+                                  prayer,
+                                  on,
+                                ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
           if (companionEnabled) ...[
             const SectionHeader('Companion'),
             AlimCard(
@@ -458,8 +685,11 @@ class SettingsScreen extends ConsumerWidget {
                   'Stories: forty-six tellings written for Alim, each '
                       'anchored to an ayah, and where possible to the '
                       'hadith that carries it.',
-                  'Audio: ayah by ayah at 64 kbps from everyayah.com. '
-                      'Streamed as you listen, never saved to the phone.',
+                  'Audio: ayah by ayah from everyayah.com. Stream any '
+                      'voice, or download a surah or a whole voice for '
+                      'offline listening.',
+                  'Adhan: two recordings from Wikimedia Commons, both '
+                      'released under CC0 by their recorders.',
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: AlimSpace.sm),

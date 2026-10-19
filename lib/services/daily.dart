@@ -33,7 +33,8 @@ const rotationTasks = <int, DailyTask>{
   1: DailyTask(
     id: 'rot-mon',
     title: 'Review Surah Al-Ikhlas',
-    subtitle: 'One short surah, from memory. It is worth a third of the Qur\'an.',
+    subtitle:
+        'One short surah, from memory. It is worth a third of the Qur\'an.',
     xp: 20,
     kind: DailyTaskKind.manual,
   ),
@@ -54,7 +55,8 @@ const rotationTasks = <int, DailyTask>{
   4: DailyTask(
     id: 'rot-thu',
     title: 'Dua for your parents',
-    subtitle: 'The night before Jumu\'ah. Ask Allah for the two who raised you.',
+    subtitle:
+        'The night before Jumu\'ah. Ask Allah for the two who raised you.',
     xp: 20,
     kind: DailyTaskKind.manual,
   ),
@@ -142,8 +144,11 @@ const allTasksBonus = 25;
 
 /// The bonus is granted once per day, the first time every task of the day is
 /// done. The caller records the day in `all_done_days`.
-bool deservesAllDoneBonus(List<DailyTask> tasks, DayLog log, Set<String> manual) =>
-    tasks.every((t) => isTaskDone(t, log, manual));
+bool deservesAllDoneBonus(
+  List<DailyTask> tasks,
+  DayLog log,
+  Set<String> manual,
+) => tasks.every((t) => isTaskDone(t, log, manual));
 
 // ------------------------------------------------------------------- ranks
 
@@ -195,7 +200,12 @@ class DhikrPhase {
 
 const dhikrPhases = <DhikrPhase>[
   DhikrPhase('سُبْحَانَ اللَّهِ', 'SubhanAllah', 'Glory be to Allah', 33),
-  DhikrPhase('الْحَمْدُ لِلَّهِ', 'Alhamdulillah', 'All praise is for Allah', 33),
+  DhikrPhase(
+    'الْحَمْدُ لِلَّهِ',
+    'Alhamdulillah',
+    'All praise is for Allah',
+    33,
+  ),
   DhikrPhase('اللَّهُ أَكْبَرُ', 'Allahu Akbar', 'Allah is the Greatest', 34),
 ];
 
@@ -225,17 +235,44 @@ int phaseFloor(int index) {
 /// picks one by turning of the year, so it is the same for everyone and it
 /// never repeats within a month.
 const verseOfDayRefs = <List<int>>[
-  [2, 255], [2, 286], [3, 8], [3, 139], [3, 159],
-  [13, 28], [14, 7], [17, 80], [20, 114], [24, 35],
-  [25, 74], [29, 69], [33, 41], [39, 53], [40, 60],
-  [49, 13], [55, 13], [57, 4], [59, 22], [64, 11],
-  [65, 3], [66, 8], [67, 1], [73, 8], [87, 14],
-  [93, 5], [94, 5], [103, 3], [108, 1], [112, 1],
+  [2, 255],
+  [2, 286],
+  [3, 8],
+  [3, 139],
+  [3, 159],
+  [13, 28],
+  [14, 7],
+  [17, 80],
+  [20, 114],
+  [24, 35],
+  [25, 74],
+  [29, 69],
+  [33, 41],
+  [39, 53],
+  [40, 60],
+  [49, 13],
+  [55, 13],
+  [57, 4],
+  [59, 22],
+  [64, 11],
+  [65, 3],
+  [66, 8],
+  [67, 1],
+  [73, 8],
+  [87, 14],
+  [93, 5],
+  [94, 5],
+  [103, 3],
+  [108, 1],
+  [112, 1],
 ];
 
-int dayNumber(DateTime date) => DateTime(date.year, date.month, date.day)
-    .difference(DateTime(2026, 1, 1))
-    .inDays;
+int dayNumber(DateTime date) =>
+    DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).difference(DateTime(2026, 1, 1)).inDays;
 
 List<int> verseRefOfDay(DateTime date) =>
     verseOfDayRefs[dayNumber(date) % verseOfDayRefs.length];
@@ -261,10 +298,22 @@ int chapterAfter(int ayahNumber, List<Surah> surahs) {
   return surahs.last.number;
 }
 
-String greetingFor(DateTime time) {
-  if (time.hour < 5) return 'Peace in the night';
-  if (time.hour < 12) return 'Peace be upon you';
-  if (time.hour < 17) return 'Peace in the afternoon';
-  if (time.hour < 20) return 'Peace in the evening';
-  return 'Peace tonight';
+String greetingFor(DateTime time) => 'Peace be upon you';
+
+/// A brief line shown when the day's ayah count reaches a meaningful number.
+String? readMilestone(int ayat) {
+  switch (ayat) {
+    case 1:
+      return 'First ayah today. A beautiful beginning.';
+    case 10:
+      return 'Ten ayat today. Keep going.';
+    case 25:
+      return 'Twenty five ayat today. Your heart is settling in.';
+    case 50:
+      return 'Fifty ayat today. A steady light.';
+    case 100:
+      return 'One hundred ayat today. MashaAllah.';
+    default:
+      return null;
+  }
 }

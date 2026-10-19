@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'duas.dart';
 import 'hadith.dart';
 import 'me.dart';
 import 'quran_list.dart';
@@ -32,6 +33,7 @@ class _ShellScreenState extends State<ShellScreen> {
           QuranListScreen(),
           HadithHomeScreen(),
           StoriesScreen(),
+          DuasScreen(),
           MeScreen(),
         ],
       ),
@@ -69,6 +71,11 @@ class _ShellScreenState extends State<ShellScreen> {
                   icon: Icon(Icons.local_library_outlined),
                   selectedIcon: Icon(Icons.local_library),
                   label: 'Stories',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.volunteer_activism_outlined),
+                  selectedIcon: Icon(Icons.volunteer_activism),
+                  label: 'Duas',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_outline),

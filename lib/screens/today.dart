@@ -50,10 +50,7 @@ class TodayScreen extends ConsumerWidget {
               const SizedBox(height: AlimSpace.md),
               _tasksCard(context, ref, taskList, logValue),
               const SizedBox(height: AlimSpace.md),
-              GratitudeField(
-                key: ValueKey(logValue?.gratitude ?? ''),
-                initial: logValue?.gratitude ?? '',
-              ),
+              GratitudeField(initial: logValue?.gratitude ?? ''),
               const SectionHeader('Verse of the day'),
               if (verse.valueOrNull != null)
                 _verseCard(context, ref, verse.value!),
@@ -61,7 +58,7 @@ class TodayScreen extends ConsumerWidget {
               if (hadith.valueOrNull != null)
                 _hadithCard(context, ref, hadith.value!),
               if (lastRead.valueOrNull != null) ...[
-                const SectionHeader('Keep your place'),
+                const SectionHeader('Continue reading'),
                 _continueCard(context, ref, lastRead.value!),
               ],
               if (stories.valueOrNull != null && stories.value!.isNotEmpty) ...[
@@ -85,19 +82,16 @@ class TodayScreen extends ConsumerWidget {
     final hijri = _hijriLabel(now);
     return StarLattice(
       child: Padding(
-        padding: const EdgeInsets.only(
-          top: AlimSpace.lg,
-          bottom: AlimSpace.lg,
-        ),
+        padding: const EdgeInsets.only(top: AlimSpace.lg, bottom: AlimSpace.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               name.isEmpty ? greetingFor(now) : '${greetingFor(now)}, $name',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.4,
-                  ),
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.4,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -118,8 +112,7 @@ class TodayScreen extends ConsumerWidget {
                 const SizedBox(width: AlimSpace.xs),
                 if (stats != null)
                   AlimPill(
-                    label:
-                        '${rankFor(stats.xp).title} · ${stats.xp} XP',
+                    label: '${rankFor(stats.xp).title} · ${stats.xp} XP',
                     icon: Icons.workspace_premium,
                     color: AlimColors.gold,
                   ),
@@ -148,9 +141,10 @@ class TodayScreen extends ConsumerWidget {
     final day = ref.watch(prayerScheduleProvider).valueOrNull;
     final at = day?.timeOf(day.next);
     return AlimCard(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const PrayerScreen()),
-      ),
+      onTap:
+          () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const PrayerScreen())),
       padding: const EdgeInsets.symmetric(
         horizontal: AlimSpace.md,
         vertical: AlimSpace.sm,
@@ -165,10 +159,7 @@ class TodayScreen extends ConsumerWidget {
                   ? 'Set your place for prayer times and qibla'
                   : '${prayerLabel(day!.next)} at '
                       '${TimeOfDay.fromDateTime(at).format(context)}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ),
           Icon(
@@ -196,9 +187,10 @@ class TodayScreen extends ConsumerWidget {
     List<DailyTask> tasks,
     DayLog? log,
   ) {
-    final done = log == null
-        ? 0
-        : tasks.where((t) => isTaskDone(t, log, log.tasks)).length;
+    final done =
+        log == null
+            ? 0
+            : tasks.where((t) => isTaskDone(t, log, log.tasks)).length;
     return AlimCard(
       padding: const EdgeInsets.all(AlimSpace.md),
       child: Column(
@@ -225,8 +217,8 @@ class TodayScreen extends ConsumerWidget {
                     Text(
                       'Today\'s plan',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -249,9 +241,8 @@ class TodayScreen extends ConsumerWidget {
             _TaskTile(
               task: task,
               done: log == null ? false : isTaskDone(task, log, log.tasks),
-              onChanged: (v) => ref
-                  .read(actionsProvider)
-                  .markManualTask(task.id, v),
+              onChanged:
+                  (v) => ref.read(actionsProvider).markManualTask(task.id, v),
               onOpen: () => _openTask(context, ref, task),
             ),
         ],
@@ -263,37 +254,46 @@ class TodayScreen extends ConsumerWidget {
     switch (task.kind) {
       case DailyTaskKind.quran:
         final last = ref.read(lastReadProvider).valueOrNull;
-        final ayah = last == null
-            ? null
-            : ref.read(surahOfAyahProvider(last)).valueOrNull;
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => QuranReaderScreen(
-            surah: ayah?.number ?? 1,
-            focusAyah: last,
+        final ayah =
+            last == null
+                ? null
+                : ref.read(surahOfAyahProvider(last)).valueOrNull;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder:
+                (_) => QuranReaderScreen(
+                  surah: ayah?.number ?? 1,
+                  focusAyah: last,
+                ),
           ),
-        ));
+        );
       case DailyTaskKind.hadith:
         final hadith = ref.read(hadithOfDayProvider).valueOrNull;
         if (hadith != null) {
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => HadithDetailScreen(hadith: hadith),
-          ));
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => HadithDetailScreen(hadith: hadith),
+            ),
+          );
         }
       case DailyTaskKind.dhikr:
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const DhikrScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const DhikrScreen()));
       case DailyTaskKind.gratitude:
         FocusScope.of(context).requestFocus(_gratitudeFocus);
       case DailyTaskKind.story:
         final stories = ref.read(storiesProvider).valueOrNull;
         if (stories != null && stories.isNotEmpty) {
           final pick =
-              stories[ref.read(todayProvider).difference(DateTime(2026)).inDays %
+              stories[ref
+                      .read(todayProvider)
+                      .difference(DateTime(2026))
+                      .inDays %
                   stories.length];
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => StoryDetailScreen(story: pick),
-          ));
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => StoryDetailScreen(story: pick)),
+          );
         }
       case DailyTaskKind.manual:
         break;
@@ -304,7 +304,7 @@ class TodayScreen extends ConsumerWidget {
     final profile = ref.watch(profileProvider);
     final bookmarked =
         ref.watch(bookmarkAtProvider(('ayah', verse.number))).valueOrNull ??
-            false;
+        false;
     final surah = ref.watch(surahOfAyahProvider(verse.number)).valueOrNull;
     return AlimCard(
       padding: const EdgeInsets.all(AlimSpace.md),
@@ -347,30 +347,36 @@ class TodayScreen extends ConsumerWidget {
                   size: 20,
                   color: bookmarked ? AlimColors.gold : null,
                 ),
-                onPressed: () => ref.read(actionsProvider).toggleBookmark(
-                      'ayah',
-                      verse.number,
-                      '${surah?.name ?? 'Qur\'an'} ${verse.surah}:${verse.ayah}',
-                    ),
+                onPressed:
+                    () => ref
+                        .read(actionsProvider)
+                        .toggleBookmark(
+                          'ayah',
+                          verse.number,
+                          '${surah?.name ?? 'Qur\'an'} ${verse.surah}:${verse.ayah}',
+                        ),
               ),
               IconButton(
                 tooltip: 'Share',
                 icon: const Icon(Icons.ios_share, size: 19),
-                onPressed: () => Share.share(
-                  '${verse.textAr}\n\n${verse.textEn}\nQur\'an ${verse.surah}:${verse.ayah}',
-                ),
+                onPressed:
+                    () => Share.share(
+                      '${verse.textAr}\n\n${verse.textEn}\nQur\'an ${verse.surah}:${verse.ayah}',
+                    ),
               ),
               IconButton(
                 tooltip: 'Open in the reader',
                 icon: const Icon(Icons.arrow_outward, size: 20),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => QuranReaderScreen(
-                      surah: verse.surah,
-                      focusAyah: verse.number,
+                onPressed:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder:
+                            (_) => QuranReaderScreen(
+                              surah: verse.surah,
+                              focusAyah: verse.number,
+                            ),
+                      ),
                     ),
-                  ),
-                ),
               ),
             ],
           ),
@@ -380,15 +386,16 @@ class TodayScreen extends ConsumerWidget {
   }
 
   Widget _hadithCard(BuildContext context, WidgetRef ref, Hadith hadith) {
-    final learnedToday = ref
-            .watch(hadithReadSetProvider)
-            .valueOrNull
-            ?.contains(hadith.id) ??
+    final learnedToday =
+        ref.watch(hadithReadSetProvider).valueOrNull?.contains(hadith.id) ??
         false;
     return AlimCard(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => HadithDetailScreen(hadith: hadith)),
-      ),
+      onTap:
+          () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => HadithDetailScreen(hadith: hadith),
+            ),
+          ),
       padding: const EdgeInsets.all(AlimSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,20 +438,37 @@ class TodayScreen extends ConsumerWidget {
 
   Widget _continueCard(BuildContext context, WidgetRef ref, int lastRead) {
     final surah = ref.watch(surahOfAyahProvider(lastRead)).valueOrNull;
-    final inSurah =
-        surah == null ? lastRead : lastRead - surah.firstAyah + 1;
+    final inSurah = surah == null ? lastRead : lastRead - surah.firstAyah + 1;
     return AlimCard(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => QuranReaderScreen(
-            surah: surah?.number ?? 1,
-            focusAyah: lastRead,
+      onTap:
+          () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder:
+                  (_) => QuranReaderScreen(
+                    surah: surah?.number ?? 1,
+                    focusAyah: lastRead,
+                  ),
+            ),
           ),
-        ),
-      ),
       child: Row(
         children: [
-          if (surah != null) StarNumber(number: surah.number, size: 44),
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AlimColors.gold.withValues(alpha: 0.12),
+              border: Border.all(
+                color: AlimColors.gold.withValues(alpha: 0.40),
+              ),
+            ),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              color: AlimColors.gold,
+              size: 22,
+            ),
+          ),
           const SizedBox(width: AlimSpace.md),
           Expanded(
             child: Column(
@@ -478,8 +502,10 @@ class TodayScreen extends ConsumerWidget {
         stories[ref.watch(todayProvider).difference(DateTime(2026)).inDays %
             stories.length];
     return AlimCard(
-      onTap: () => Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => StoryDetailScreen(story: pick))),
+      onTap:
+          () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => StoryDetailScreen(story: pick)),
+          ),
       child: Row(
         children: [
           const Icon(Icons.local_library_outlined, color: AlimColors.gold),
@@ -539,29 +565,49 @@ class GratitudeField extends ConsumerStatefulWidget {
 }
 
 class _GratitudeFieldState extends ConsumerState<GratitudeField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
-  final _focus = FocusNode();
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
+  late String _saved = widget.initial.trim();
 
   @override
   void initState() {
     super.initState();
-    _focus.addListener(() {
-      if (!_focus.hasFocus) _save();
-    });
+    _gratitudeFocus.addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
+    _gratitudeFocus.removeListener(_onFocusChange);
     _controller.dispose();
-    _focus.dispose();
     super.dispose();
   }
 
-  void _save() {
+  void _onFocusChange() {
+    if (!_gratitudeFocus.hasFocus) _save(quiet: true);
+  }
+
+  Future<void> _save({bool quiet = false}) async {
     final text = _controller.text.trim();
-    if (text != widget.initial.trim()) {
-      ref.read(actionsProvider).setGratitude(text);
+    if (text == _saved) {
+      if (!quiet) _gratitudeFocus.unfocus();
+      return;
+    }
+    await ref.read(actionsProvider).setGratitude(text);
+    if (!mounted) return;
+    setState(() => _saved = text);
+    if (!quiet) {
+      _controller.clear();
+      _gratitudeFocus.unfocus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            text.isEmpty ? 'Gratitude cleared.' : 'Gratitude saved for today.',
+          ),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -574,26 +620,79 @@ class _GratitudeFieldState extends ConsumerState<GratitudeField> {
         children: [
           Row(
             children: [
-              const Icon(Icons.favorite_outline, size: 18, color: AlimColors.rose),
+              const Icon(
+                Icons.favorite_outline,
+                size: 18,
+                color: AlimColors.rose,
+              ),
               const SizedBox(width: AlimSpace.xs),
               Text(
                 'One line of gratitude',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: AlimSpace.xs),
           TextField(
             controller: _controller,
-            focusNode: _focus,
+            focusNode: _gratitudeFocus,
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               hintText: 'Today I am thankful for…',
               isDense: true,
             ),
             onSubmitted: (_) => _save(),
+          ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (context, value, _) {
+              if (_saved.isEmpty || value.text.trim() == _saved) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: AlimSpace.xs),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(AlimRadius.field),
+                  onTap: () {
+                    _controller.text = _saved;
+                    _controller.selection = TextSelection.collapsed(
+                      offset: _saved.length,
+                    );
+                    _gratitudeFocus.requestFocus();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline,
+                          size: 15,
+                          color: AlimColors.gold,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Saved for today: $_saved',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AlimColors.mutedOf(context),
+                              fontSize: 12.5,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -622,10 +721,7 @@ class _TaskTile extends StatelessWidget {
       child: Row(
         children: [
           if (manual)
-            Checkbox(
-              value: done,
-              onChanged: (v) => onChanged(v ?? false),
-            )
+            Checkbox(value: done, onChanged: (v) => onChanged(v ?? false))
           else
             Padding(
               padding: const EdgeInsets.only(left: 2, right: 4),
@@ -633,13 +729,14 @@ class _TaskTile extends StatelessWidget {
                 value: done ? 1 : 0,
                 size: 26,
                 stroke: 2.6,
-                child: done
-                    ? Icon(
-                        Icons.check,
-                        size: 15,
-                        color: Theme.of(context).colorScheme.primary,
-                      )
-                    : const SizedBox.shrink(),
+                child:
+                    done
+                        ? Icon(
+                          Icons.check,
+                          size: 15,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                        : const SizedBox.shrink(),
               ),
             ),
           const SizedBox(width: AlimSpace.xs),
@@ -648,10 +745,7 @@ class _TaskTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(AlimRadius.field),
               onTap: onOpen,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 6,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -661,9 +755,7 @@ class _TaskTile extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         fontSize: 14.5,
                         decoration: done ? TextDecoration.lineThrough : null,
-                        color: done
-                            ? AlimColors.mutedOf(context)
-                            : null,
+                        color: done ? AlimColors.mutedOf(context) : null,
                       ),
                     ),
                     Text(
@@ -682,9 +774,10 @@ class _TaskTile extends StatelessWidget {
           Text(
             '+${task.xp}',
             style: TextStyle(
-              color: done
-                  ? AlimColors.mutedOf(context)
-                  : Theme.of(context).colorScheme.primary,
+              color:
+                  done
+                      ? AlimColors.mutedOf(context)
+                      : Theme.of(context).colorScheme.primary,
               fontWeight: FontWeight.w700,
               fontSize: 12.5,
             ),

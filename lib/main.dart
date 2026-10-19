@@ -8,6 +8,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'data/store.dart';
 import 'screens/onboarding.dart';
 import 'screens/shell.dart';
+import 'services/location.dart';
 import 'services/notifications.dart';
 import 'state.dart';
 import 'theme.dart';
@@ -53,6 +54,7 @@ class _BootRootState extends State<BootRoot> {
   late final Future<_Ready> _ready = _open();
 
   Future<_Ready> _open() async {
+    final watch = Stopwatch()..start();
     final store = await AlimStore.open();
     var onboarded = false;
     try {
@@ -66,50 +68,89 @@ class _BootRootState extends State<BootRoot> {
       onboarded = false;
     }
     await Notifications.init();
+    await _restoreAdhan(store);
+    final left = const Duration(seconds: 3) - watch.elapsed;
+    if (left > Duration.zero) await Future<void>.delayed(left);
     return _Ready(store, onboarded);
+  }
+
+  /// Keeps the next days of adhan written after a restart, in case Android
+  /// dropped the alarms or the phone was off for a while.
+  Future<void> _restoreAdhan(AlimStore store) async {
+    try {
+      final rawProfile = await store.kvGet('profile');
+      if (rawProfile == null) return;
+      final profile = jsonDecode(rawProfile) as Map<String, dynamic>;
+      if (profile['adhanOn'] != true) return;
+      final rawPlace = await store.kvGet('location') ?? '';
+      final parts = rawPlace.split(',');
+      if (parts.length != 2) return;
+      final place = AlimLocation(
+        double.parse(parts[0]),
+        double.parse(parts[1]),
+      );
+      await Notifications.scheduleAdhan(
+        place: place,
+        method: profile['prayerMethod'] as String? ?? 'muslimWorldLeague',
+        asrHanafi: profile['asrHanafi'] as bool? ?? false,
+        sound: profile['adhanSound'] as String? ?? 'short',
+        prayers: Notifications.prayersFromCsv(
+          profile['adhanPrayers'] as String?,
+        ),
+      );
+    } catch (_) {
+      // A missing fix or an odd profile just leaves the adhan quiet.
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_Ready>(
-      future: _ready,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: buildAlimTheme(Brightness.light),
-            builder: alimBackdropBuilder,
-            home: Scaffold(
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(AlimSpace.lg),
-                  child: Text(
-                    'Alim could not open its library. Restart the app.\n\n'
-                    '${snapshot.error}',
-                    textAlign: TextAlign.center,
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 450),
+      reverseDuration: const Duration(milliseconds: 450),
+      child: FutureBuilder<_Ready>(
+        future: _ready,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return MaterialApp(
+              key: const ValueKey('boot-error'),
+              debugShowCheckedModeBanner: false,
+              theme: buildAlimTheme(Brightness.light),
+              builder: alimBackdropBuilder,
+              home: Scaffold(
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AlimSpace.lg),
+                    child: Text(
+                      'Alim could not open its library. Restart the app.\n\n'
+                      '${snapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
               ),
-            ),
+            );
+          }
+          final ready = snapshot.data;
+          if (ready == null) {
+            return MaterialApp(
+              key: const ValueKey('boot-splash'),
+              title: 'Alim',
+              debugShowCheckedModeBanner: false,
+              theme: buildAlimTheme(Brightness.light),
+              darkTheme: buildAlimTheme(Brightness.dark),
+              themeMode: ThemeMode.system,
+              builder: alimBackdropBuilder,
+              home: const BootSplash(),
+            );
+          }
+          return ProviderScope(
+            key: const ValueKey('boot-ready'),
+            overrides: [storeProvider.overrideWithValue(ready.store)],
+            child: AlimApp(onboarded: ready.onboarded),
           );
-        }
-        final ready = snapshot.data;
-        if (ready == null) {
-          return MaterialApp(
-            title: 'Alim',
-            debugShowCheckedModeBanner: false,
-            theme: buildAlimTheme(Brightness.light),
-            darkTheme: buildAlimTheme(Brightness.dark),
-            themeMode: ThemeMode.system,
-            builder: alimBackdropBuilder,
-            home: const BootSplash(),
-          );
-        }
-        return ProviderScope(
-          overrides: [storeProvider.overrideWithValue(ready.store)],
-          child: AlimApp(onboarded: ready.onboarded),
-        );
-      },
+        },
+      ),
     );
   }
 }
@@ -182,13 +223,17 @@ class AlimApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dark = ref.watch(profileProvider.select((p) => p.darkMode));
+    final mode = ref.watch(profileProvider.select((p) => p.themeMode));
     return MaterialApp(
       title: 'Alim',
       debugShowCheckedModeBanner: false,
       theme: buildAlimTheme(Brightness.light),
       darkTheme: buildAlimTheme(Brightness.dark),
-      themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+      themeMode: switch (mode) {
+        'dark' => ThemeMode.dark,
+        'light' => ThemeMode.light,
+        _ => ThemeMode.system,
+      },
       builder: alimBackdropBuilder,
       home: onboarded ? const ShellScreen() : const OnboardingScreen(),
     );

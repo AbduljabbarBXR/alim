@@ -10,11 +10,19 @@ import '../models.dart';
 /// 64 kbps, roughly 17 hours of Qur'an for about 500 MB if it were ever
 /// saved, so it is streamed instead.
 class Reciter {
-  const Reciter({required this.id, required this.name, required this.folder});
+  const Reciter({
+    required this.id,
+    required this.name,
+    required this.folder,
+    this.style = 'Murattal',
+    this.kbps = 64,
+  });
 
   final String id;
   final String name;
   final String folder;
+  final String style;
+  final int kbps;
 }
 
 const reciters = <Reciter>[
@@ -29,9 +37,46 @@ const reciters = <Reciter>[
     folder: 'Abdul_Basit_Murattal_64kbps',
   ),
   Reciter(
+    id: 'abdulbasit_mujawwad',
+    name: 'Abdul Basit (Mujawwad)',
+    folder: 'Abdul_Basit_Mujawwad_128kbps',
+    style: 'Mujawwad',
+    kbps: 128,
+  ),
+  Reciter(
     id: 'husary',
     name: 'Mahmoud Khalil Al-Husary',
     folder: 'Husary_64kbps',
+  ),
+  Reciter(
+    id: 'husary_mujawwad',
+    name: 'Al-Husary (Mujawwad)',
+    folder: 'Husary_Mujawwad_64kbps',
+    style: 'Mujawwad',
+  ),
+  Reciter(
+    id: 'minshawy',
+    name: 'Mohamed Siddiq Al-Minshawi',
+    folder: 'Minshawy_Murattal_128kbps',
+    kbps: 128,
+  ),
+  Reciter(
+    id: 'sudais',
+    name: 'Abdurrahman As-Sudais',
+    folder: 'Abdurrahmaan_As-Sudais_192kbps',
+    kbps: 192,
+  ),
+  Reciter(
+    id: 'shuraym',
+    name: 'Saud Ash-Shuraym',
+    folder: 'Saood_ash-Shuraym_128kbps',
+    kbps: 128,
+  ),
+  Reciter(
+    id: 'ghamidi',
+    name: 'Saad Al-Ghamdi',
+    folder: 'Ghamadi_40kbps',
+    kbps: 40,
   ),
 ];
 
@@ -43,6 +88,19 @@ String ayahAudioUrl(Reciter reciter, int surah, int ayah) {
   final s = surah.toString().padLeft(3, '0');
   final a = ayah.toString().padLeft(3, '0');
   return 'https://everyayah.com/data/${reciter.folder}/$s$a.mp3';
+}
+
+/// The per-surah archive EveryAyah keeps beside the loose files.
+String surahZipUrl(Reciter reciter, int surah) {
+  final s = surah.toString().padLeft(3, '0');
+  return 'https://everyayah.com/data/${reciter.folder}/zips/$s.zip';
+}
+
+/// Where a downloaded ayah lives once a surah is unpacked.
+String localAyahPath(String directory, int surah, int ayah) {
+  final s = surah.toString().padLeft(3, '0');
+  final a = ayah.toString().padLeft(3, '0');
+  return '$directory/$s$a.mp3';
 }
 
 class AudioView {
@@ -142,6 +200,7 @@ class AyahAudio extends StateNotifier<AudioView> {
     required List<Ayah> ayat,
     required Reciter reciter,
     int? startAyah,
+    String? localDir,
   }) {
     if (_surah == surahNumber && _reciter?.id == reciter.id) {
       return toggle();
@@ -152,6 +211,7 @@ class AyahAudio extends StateNotifier<AudioView> {
       ayat: ayat,
       reciter: reciter,
       startAyah: startAyah,
+      localDir: localDir,
     );
   }
 
@@ -161,6 +221,7 @@ class AyahAudio extends StateNotifier<AudioView> {
     required List<Ayah> ayat,
     required Reciter reciter,
     int? startAyah,
+    String? localDir,
   }) async {
     if (ayat.isEmpty) return;
     final player = _ensure();
@@ -183,7 +244,9 @@ class AyahAudio extends StateNotifier<AudioView> {
     final sources = <AudioSource>[
       for (final a in ayat)
         AudioSource.uri(
-          Uri.parse(ayahAudioUrl(reciter, a.surah, a.ayah)),
+          localDir == null
+              ? Uri.parse(ayahAudioUrl(reciter, a.surah, a.ayah))
+              : Uri.file(localAyahPath(localDir, a.surah, a.ayah)),
           tag: MediaItem(
             id: '${a.surah}:${a.ayah}',
             title: 'Surah $surahName, ayah ${a.ayah}',

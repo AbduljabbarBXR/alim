@@ -6,11 +6,12 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../services/audio.dart';
+import '../services/audio_downloads.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'hadith.dart';
-import 'mushaf.dart';
+import 'reciters.dart';
 import 'stories.dart';
 
 class QuranReaderScreen extends ConsumerStatefulWidget {
@@ -29,6 +30,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
   final ItemScrollController _scroll = ItemScrollController();
   bool _translation = true;
   bool _announced = false;
+  int? _lastTapped;
 
   @override
   void initState() {
@@ -41,8 +43,15 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
     final profile = ref.watch(profileProvider);
     final view = ref.watch(surahViewProvider(widget.surah));
     final audio = ref.watch(audioProvider);
+    final reciter = ref.watch(activeReciterProvider);
+    final downloads = ref.watch(audioDownloadsProvider);
+    final downloadManager = ref.watch(audioDownloadsProvider.notifier);
+    final downloaded = downloadManager.isSurahDownloaded(
+      reciter.id,
+      widget.surah,
+    );
+    final downloadTask = downloads['${reciter.id}/${widget.surah}'];
     final playingHere = audio.surah == widget.surah ? audio.ayah : null;
-    final audioBusy = playingHere != null && (audio.playing || audio.loading);
     ref.listen<AudioView>(audioProvider, (previous, next) {
       if (next.surah != widget.surah || next.ayah == null) return;
       if (next.ayah == previous?.ayah) return;
@@ -58,7 +67,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
         alignment: 0.25,
       );
     });
-    final read = ref.watch(readSetProvider).valueOrNull ?? const <int>{};
+    final read = ref.watch(readSetProvider).valueOrNull ?? const <String>{};
     final surah = view.valueOrNull?.surah;
     final lastRead = ref.watch(lastReadProvider).valueOrNull;
     final bookmarkedAyat =
@@ -88,103 +97,178 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: audioBusy ? 'Pause' : 'Listen',
-            icon: Icon(
-              audioBusy
-                  ? Icons.pause_circle_outline
-                  : Icons.play_circle_outline,
-            ),
-            onPressed:
-                view.valueOrNull == null
-                    ? null
-                    : () {
-                      final loaded = view.valueOrNull!;
-                      ref
-                          .read(audioProvider.notifier)
-                          .toggleSurah(
-                            surahNumber: loaded.surah.number,
-                            surahName: loaded.surah.name,
-                            ayat: loaded.ayat,
-                            reciter: ref.read(activeReciterProvider),
-                            startAyah: widget.focusAyah,
-                          );
-                    },
-          ),
-          IconButton(
-            tooltip: 'Mushaf page',
-            icon: const Icon(Icons.import_contacts_outlined),
-            onPressed:
-                view.valueOrNull == null
-                    ? null
-                    : () {
-                      final target =
-                          widget.focusAyah ??
-                          view.valueOrNull!.ayat.first.number;
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => MushafScreen(initialAyah: target),
-                        ),
-                      );
-                    },
-          ),
-          IconButton(
             tooltip: _translation ? 'Hide translation' : 'Show translation',
             icon: Icon(
               _translation ? Icons.translate : Icons.translate_outlined,
             ),
             onPressed: () => setState(() => _translation = !_translation),
           ),
-          IconButton(
-            tooltip: 'Bookmarks',
-            icon: const Icon(Icons.bookmarks_outlined),
-            onPressed:
-                () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const BookmarksScreen()),
-                ),
-          ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(58),
+          child: _ReciterBar(
+            reciter: reciter,
+            downloaded: downloaded,
+            task: downloadTask,
+            audio: audio,
+            surahNumber: widget.surah,
+            surahFirstAyah: view.valueOrNull?.surah.firstAyah ?? 1,
+            surahAyahCount: view.valueOrNull?.surah.ayat ?? 0,
+            markerAyah: playingHere ?? _lastTapped ?? widget.focusAyah,
+            downloadBeforePlay: profile.downloadBeforePlay,
+            onPlay:
+                view.valueOrNull == null
+                    ? null
+                    : () => _playPressed(view.value!, reciter, audio),
+            onPrevious:
+                audio.surah == widget.surah
+                    ? () => ref.read(audioProvider.notifier).previous()
+                    : null,
+            onNext:
+                audio.surah == widget.surah
+                    ? () => ref.read(audioProvider.notifier).next()
+                    : null,
+            onChange: () => showReciterPicker(context, ref),
+            onDownload:
+                view.valueOrNull == null
+                    ? null
+                    : () => _downloadPressed(view.value!, reciter, downloaded),
+          ),
+        ),
       ),
       body: switch (view) {
-        AsyncData(:final value) => _reader(
-          context,
-          value,
-          profile.arabicScale,
-          read,
-          lastRead,
-          bookmarkedAyat,
-          playingHere,
+        AsyncData(:final value) => GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragEnd:
+              (details) => _swipeSurah(value.surah.number, details),
+          child: _reader(
+            context,
+            value,
+            profile.arabicScale,
+            read,
+            lastRead,
+            bookmarkedAyat,
+            playingHere,
+          ),
         ),
         AsyncError(:final error) => Center(child: Text('$error')),
         _ => const Center(child: CircularProgressIndicator()),
       },
-      bottomNavigationBar:
-          playingHere == null || view.valueOrNull == null
-              ? null
-              : _AudioBar(
-                audio: audio,
-                label: _audioLabel(view.valueOrNull!, playingHere),
-                onPrevious: () => ref.read(audioProvider.notifier).previous(),
-                onNext: () => ref.read(audioProvider.notifier).next(),
-                onToggle: () => ref.read(audioProvider.notifier).toggle(),
-                onClose: () => ref.read(audioProvider.notifier).stop(),
-              ),
     );
   }
 
-  String _audioLabel(SurahView view, int number) {
-    if (number < view.surah.firstAyah ||
-        number >= view.surah.firstAyah + view.surah.ayat) {
-      return view.surah.name;
+  void _swipeSurah(int current, DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 250) return;
+    final target = velocity < 0 ? current + 1 : current - 1;
+    if (target < 1 || target > 114) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            target < 1 ? 'This is the first surah.' : 'This is the last surah.',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
     }
-    final local = number - view.surah.firstAyah + 1;
-    return '${view.surah.name} $local';
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => QuranReaderScreen(surah: target)),
+    );
+  }
+
+  void _playPressed(SurahView view, Reciter reciter, AudioView audio) {
+    if (audio.surah == view.surah.number && audio.ayah != null) {
+      ref.read(audioProvider.notifier).toggle();
+      return;
+    }
+    _startListening(view, reciter);
+  }
+
+  Future<void> _startListening(SurahView view, Reciter reciter) async {
+    final manager = ref.read(audioDownloadsProvider.notifier);
+    var directory = manager.surahDirectorySync(reciter.id, view.surah.number);
+    if (directory == null && ref.read(profileProvider).downloadBeforePlay) {
+      final choice = await _offerDownload(view, reciter);
+      if (choice == null || !mounted) return;
+      if (choice) {
+        directory = manager.surahDirectorySync(reciter.id, view.surah.number);
+      }
+    }
+    if (!mounted) return;
+    await ref
+        .read(audioProvider.notifier)
+        .toggleSurah(
+          surahNumber: view.surah.number,
+          surahName: view.surah.name,
+          ayat: view.ayat,
+          reciter: reciter,
+          startAyah: _lastTapped ?? widget.focusAyah,
+          localDir: directory,
+        );
+  }
+
+  Future<bool?> _offerDownload(SurahView view, Reciter reciter) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder:
+          (_) => _DownloadSheet(
+            reciter: reciter,
+            surah: view.surah.number,
+            surahName: view.surah.name,
+            ayatCount: view.ayat.length,
+          ),
+    );
+  }
+
+  Future<void> _downloadPressed(
+    SurahView view,
+    Reciter reciter,
+    bool downloaded,
+  ) async {
+    if (!downloaded) {
+      await _offerDownload(view, reciter);
+      return;
+    }
+    final remove = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Remove the download?'),
+            content: Text(
+              '${view.surah.name} by ${reciter.name} will no longer be '
+              'available offline. You can download it again anytime.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Keep'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AlimColors.rose),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+    );
+    if (remove != true) return;
+    await ref
+        .read(audioDownloadsProvider.notifier)
+        .deleteSurah(reciter.id, view.surah.number);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Download removed.')));
   }
 
   Widget _reader(
     BuildContext context,
     SurahView view,
     double scale,
-    Set<int> read,
+    Set<String> read,
     int? lastRead,
     Set<int> bookmarkedAyat,
     int? playingAyah,
@@ -242,7 +326,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
           );
         }
         final ayah = view.ayat[i - headerCount];
-        final isRead = read.contains(ayah.number);
+        final isRead = read.contains('${ayah.surah}:${ayah.ayah}');
         final focused = widget.focusAyah == ayah.number;
         return _AyahTile(
           key: ValueKey(ayah.number),
@@ -255,19 +339,17 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
           bookmarked: bookmarkedAyat.contains(ayah.number),
           focused: focused,
           playing: playingAyah == ayah.number,
-          onPlay:
-              () => ref
-                  .read(audioProvider.notifier)
-                  .play(
-                    surahNumber: view.surah.number,
-                    surahName: view.surah.name,
-                    ayat: view.ayat,
-                    reciter: ref.read(activeReciterProvider),
-                    startAyah: ayah.number,
-                  ),
           onTap: () async {
-            await ref.read(actionsProvider).markAyahRead(ayah.number);
+            setState(() => _lastTapped = ayah.number);
+            final milestone = await ref
+                .read(actionsProvider)
+                .markAyahRead(surah: ayah.surah, ayah: ayah.ayah);
+            await ref.read(actionsProvider).setLastRead(ayah.number);
             if (!context.mounted) return;
+            if (milestone != null) {
+              HapticFeedback.mediumImpact();
+              showAlimToast(context, milestone);
+            }
             showAyahSheet(context, ref, ayah, view.surah.name);
           },
         );
@@ -329,7 +411,6 @@ class _AyahTile extends StatelessWidget {
     required this.bookmarked,
     required this.focused,
     required this.playing,
-    required this.onPlay,
     required this.onTap,
   });
 
@@ -342,7 +423,6 @@ class _AyahTile extends StatelessWidget {
   final bool bookmarked;
   final bool focused;
   final bool playing;
-  final VoidCallback onPlay;
   final VoidCallback onTap;
 
   @override
@@ -384,23 +464,6 @@ class _AyahTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AlimSpace.xs),
-                IconButton(
-                  tooltip: playing ? 'Playing' : 'Play this ayah',
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(
-                    playing
-                        ? Icons.pause_circle_filled
-                        : Icons.play_circle_fill,
-                    size: 22,
-                    color:
-                        playing
-                            ? AlimColors.gold
-                            : Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.75),
-                  ),
-                  onPressed: onPlay,
-                ),
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child:
@@ -459,84 +522,280 @@ class _AyahTile extends StatelessWidget {
   }
 }
 
-class _AudioBar extends StatelessWidget {
-  const _AudioBar({
+class _ReciterBar extends StatelessWidget {
+  const _ReciterBar({
+    required this.reciter,
+    required this.downloaded,
+    required this.task,
     required this.audio,
-    required this.label,
+    required this.surahNumber,
+    required this.surahFirstAyah,
+    required this.surahAyahCount,
+    required this.markerAyah,
+    required this.downloadBeforePlay,
+    required this.onPlay,
     required this.onPrevious,
     required this.onNext,
-    required this.onToggle,
-    required this.onClose,
+    required this.onChange,
+    required this.onDownload,
   });
 
+  final Reciter reciter;
+  final bool downloaded;
+  final DownloadTask? task;
   final AudioView audio;
-  final String label;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
-  final VoidCallback onToggle;
-  final VoidCallback onClose;
+  final int surahNumber;
+  final int surahFirstAyah;
+  final int surahAyahCount;
+  final int? markerAyah;
+  final bool downloadBeforePlay;
+  final VoidCallback? onPlay;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+  final VoidCallback onChange;
+  final VoidCallback? onDownload;
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final subtitle =
-        audio.failed
-            ? 'Could not play this ayah. Try the next one.'
-            : audio.loading
-            ? 'Loading...'
-            : '$label, ${audio.reciterName ?? ''}';
+    final local = markerAyah == null ? null : markerAyah! - surahFirstAyah + 1;
+    final within = local != null && local >= 1 && local <= surahAyahCount;
+    final here = audio.surah == surahNumber && audio.ayah != null;
+    final busy = task?.busy ?? false;
+    final status =
+        downloaded
+            ? (within ? 'Saved · Ayah $local' : 'Saved · ready offline')
+            : busy
+            ? (task?.detail ?? 'Saving')
+            : (within
+                ? 'Ayah $local · ${downloadBeforePlay ? 'download first' : 'streaming'}'
+                : (downloadBeforePlay ? 'Download first' : 'Streaming'));
     return DecoratedBox(
       decoration: BoxDecoration(
         color: dark ? const Color(0xF215211D) : const Color(0xF7FFFDF8),
         border: Border(
-          top: BorderSide(color: AlimColors.gold.withValues(alpha: 0.35)),
+          bottom: BorderSide(color: AlimColors.gold.withValues(alpha: 0.28)),
         ),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(AlimSpace.xs, 0, AlimSpace.xs, 0),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Previous ayah',
-                icon: const Icon(Icons.skip_previous),
-                onPressed: onPrevious,
-              ),
-              IconButton(
-                tooltip: audio.playing ? 'Pause' : 'Play',
-                iconSize: 38,
-                color: AlimColors.gold,
-                icon: Icon(
-                  audio.playing
-                      ? Icons.pause_circle_filled
-                      : Icons.play_circle_fill,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AlimSpace.sm, 0, AlimSpace.xs, 0),
+        child: Row(
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(AlimRadius.field),
+              onTap: onChange,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.headphones_outlined,
+                      size: 17,
+                      color: AlimColors.gold,
+                    ),
+                    const SizedBox(width: 7),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 148),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            reciter.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                          Text(
+                            status,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AlimColors.mutedOf(context),
+                              fontSize: 10.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                onPressed: onToggle,
               ),
-              IconButton(
-                tooltip: 'Next ayah',
-                icon: const Icon(Icons.skip_next),
-                onPressed: onNext,
+            ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Previous ayah',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.skip_previous, size: 22),
+              onPressed: onPrevious,
+            ),
+            IconButton(
+              tooltip: here && audio.playing ? 'Pause' : 'Listen',
+              visualDensity: VisualDensity.compact,
+              color: AlimColors.gold,
+              icon:
+                  audio.loading && here
+                      ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : Icon(
+                        here && audio.playing
+                            ? Icons.pause_circle_filled
+                            : Icons.play_circle_fill,
+                        size: 32,
+                      ),
+              onPressed: onPlay,
+            ),
+            IconButton(
+              tooltip: 'Next ayah',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.skip_next, size: 22),
+              onPressed: onNext,
+            ),
+            IconButton(
+              tooltip:
+                  downloaded
+                      ? 'Saved offline'
+                      : (busy ? 'Downloading' : 'Download this surah'),
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                downloaded
+                    ? Icons.download_done
+                    : (busy ? Icons.downloading : Icons.download_outlined),
+                size: 21,
+                color:
+                    downloaded ? Theme.of(context).colorScheme.primary : null,
               ),
-              Expanded(
-                child: Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AlimColors.mutedOf(context),
-                    fontSize: 12.5,
+              onPressed: onDownload,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadSheet extends ConsumerStatefulWidget {
+  const _DownloadSheet({
+    required this.reciter,
+    required this.surah,
+    required this.surahName,
+    required this.ayatCount,
+  });
+
+  final Reciter reciter;
+  final int surah;
+  final String surahName;
+  final int ayatCount;
+
+  @override
+  ConsumerState<_DownloadSheet> createState() => _DownloadSheetState();
+}
+
+class _DownloadSheetState extends ConsumerState<_DownloadSheet> {
+  bool _closed = false;
+
+  String get _key => '${widget.reciter.id}/${widget.surah}';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref
+          .read(audioDownloadsProvider.notifier)
+          .downloadSurah(widget.reciter, widget.surah);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final task = ref.watch(audioDownloadsProvider)[_key];
+    if (task?.phase == DownloadPhase.done && !_closed) {
+      _closed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop(true);
+      });
+    }
+    final failed = task?.phase == DownloadPhase.failed;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AlimSpace.lg,
+          0,
+          AlimSpace.lg,
+          AlimSpace.lg,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.cloud_download_outlined,
+                  color: AlimColors.gold,
+                ),
+                const SizedBox(width: AlimSpace.sm),
+                Expanded(
+                  child: Text(
+                    'Saving ${widget.surahName}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${widget.reciter.name} · ${widget.ayatCount} ayat',
+              style: TextStyle(
+                color: AlimColors.mutedOf(context),
+                fontSize: 12.5,
               ),
-              IconButton(
-                tooltip: 'Stop',
-                icon: const Icon(Icons.close),
-                onPressed: onClose,
+            ),
+            const SizedBox(height: AlimSpace.md),
+            if (failed) ...[
+              Text(
+                task?.error ?? 'The download stopped.',
+                style: const TextStyle(color: AlimColors.rose, fontSize: 13),
+              ),
+              const SizedBox(height: AlimSpace.sm),
+              OutlinedButton(
+                onPressed: () {
+                  ref
+                      .read(audioDownloadsProvider.notifier)
+                      .downloadSurah(widget.reciter, widget.surah);
+                },
+                child: const Text('Try again'),
+              ),
+            ] else ...[
+              LinearProgressIndicator(
+                value: task != null && task.progress > 0 ? task.progress : null,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                task?.detail ?? 'Starting the download',
+                style: TextStyle(
+                  color: AlimColors.mutedOf(context),
+                  fontSize: 12,
+                ),
               ),
             ],
-          ),
+            const SizedBox(height: AlimSpace.md),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Stream instead'),
+            ),
+          ],
         ),
       ),
     );
@@ -570,7 +829,11 @@ class _AyahSheet extends ConsumerWidget {
         false;
     final isLastRead = ref.watch(lastReadProvider).valueOrNull == ayah.number;
     final readToday =
-        ref.watch(readSetProvider).valueOrNull?.contains(ayah.number) ?? false;
+        ref
+            .watch(readSetProvider)
+            .valueOrNull
+            ?.contains('${ayah.surah}:${ayah.ayah}') ??
+        false;
     final label = '$surahName ${ayah.surah}:${ayah.ayah}';
     return SafeArea(
       child: Column(

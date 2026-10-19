@@ -109,15 +109,12 @@ void main() {
     await tester.tap(find.text('Al-Faatiha 1:1'));
     await settle(tester);
     expect(find.text('Read today'), findsOneWidget);
-    expect(find.text('Mark as last read'), findsOneWidget);
+    expect(find.text('This is your place'), findsOneWidget);
+    expect(find.textContaining('First ayah today'), findsOneWidget);
 
     final read = await store.kvGet('read_set_${AlimStore.todayKey(monday)}');
     expect(read, isNotNull);
-    expect(read!.split(','), contains('1'));
-    expect(await store.lastRead(), isNull);
-
-    await tester.tap(find.text('Mark as last read'));
-    await settle(tester);
+    expect(read!.split(','), contains('1:1'));
     expect(await store.lastRead(), 1);
   });
 

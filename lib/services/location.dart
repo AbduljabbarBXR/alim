@@ -45,18 +45,27 @@ class LocationService {
       throw const LocationProblemException(LocationProblem.denied);
     }
 
-    if (!await Geolocator.isLocationServiceEnabled()) {
+    if (!await _serviceOn(tries: 3)) {
       await _askToTurnOnLocation();
-      if (!await Geolocator.isLocationServiceEnabled()) {
+      if (!await _serviceOn(tries: 10)) {
         throw const LocationProblemException(LocationProblem.serviceOff);
       }
     }
 
     try {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null &&
+          DateTime.now().difference(last.timestamp).abs() <
+              const Duration(minutes: 30)) {
+        return AlimLocation(last.latitude, last.longitude);
+      }
+    } catch (_) {}
+
+    try {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.low,
-          timeLimit: Duration(seconds: 15),
+          timeLimit: Duration(seconds: 8),
         ),
       );
       return AlimLocation(position.latitude, position.longitude);
@@ -68,6 +77,16 @@ class LocationService {
       } catch (_) {}
       throw const LocationProblemException(LocationProblem.unavailable);
     }
+  }
+
+  static Future<bool> _serviceOn({required int tries}) async {
+    for (var i = 0; i < tries; i++) {
+      if (await Geolocator.isLocationServiceEnabled()) return true;
+      if (i + 1 < tries) {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+    }
+    return false;
   }
 
   /// Opens Android's own "turn on location" dialog, then waits for the person

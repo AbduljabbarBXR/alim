@@ -1,8 +1,106 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+
+/// A brief floating line near the top of the screen, used for milestones.
+void showAlimToast(BuildContext context, String message) {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) return;
+  late final OverlayEntry inserted;
+  inserted = OverlayEntry(
+    builder:
+        (_) => _AlimToast(
+          message: message,
+          onDone: () {
+            if (inserted.mounted) inserted.remove();
+            inserted.dispose();
+          },
+        ),
+  );
+  overlay.insert(inserted);
+}
+
+class _AlimToast extends StatefulWidget {
+  const _AlimToast({required this.message, required this.onDone});
+
+  final String message;
+  final VoidCallback onDone;
+
+  @override
+  State<_AlimToast> createState() => _AlimToastState();
+}
+
+class _AlimToastState extends State<_AlimToast> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(const Duration(seconds: 3), () {
+      if (mounted) widget.onDone();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Positioned(
+      top: MediaQuery.paddingOf(context).top + 12,
+      left: 20,
+      right: 20,
+      child: IgnorePointer(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xF215211D) : const Color(0xF7FFFDF8),
+              borderRadius: BorderRadius.circular(AlimRadius.card),
+              border: Border.all(
+                color: AlimColors.gold.withValues(alpha: 0.55),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.16),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.auto_awesome,
+                  size: 18,
+                  color: AlimColors.gold,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    widget.message,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class AlimCard extends StatelessWidget {
   const AlimCard({

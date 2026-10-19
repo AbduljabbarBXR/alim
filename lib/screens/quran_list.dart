@@ -34,9 +34,10 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('The Qur\'an')),
-      body: query.length >= 2
-          ? _searchResults(results.valueOrNull ?? const [])
-          : _hub(surahs.valueOrNull ?? const []),
+      body:
+          query.length >= 2
+              ? _searchResults(results.valueOrNull ?? const [])
+              : _hub(surahs.valueOrNull ?? const []),
     );
   }
 
@@ -61,9 +62,10 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
                 context,
                 icon: Icons.grid_view_rounded,
                 label: 'By Juz',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const JuzListScreen()),
-                ),
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const JuzListScreen()),
+                    ),
               ),
             ),
             const SizedBox(width: AlimSpace.sm),
@@ -72,9 +74,12 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
                 context,
                 icon: Icons.bookmarks_outlined,
                 label: 'Bookmarks',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const BookmarksScreen()),
-                ),
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const BookmarksScreen(),
+                      ),
+                    ),
               ),
             ),
           ],
@@ -87,15 +92,16 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
           decoration: InputDecoration(
             hintText: 'Search the Qur\'an in Arabic or English',
             prefixIcon: const Icon(Icons.search),
-            suffixIcon: _query.text.isEmpty
-                ? null
-                : IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      _query.clear();
-                      setState(() {});
-                    },
-                  ),
+            suffixIcon:
+                _query.text.isEmpty
+                    ? null
+                    : IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _query.clear();
+                        setState(() {});
+                      },
+                    ),
           ),
         ),
         const SizedBox(height: AlimSpace.sm),
@@ -106,20 +112,21 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
 
   Widget _continueCard() {
     final lastRead = ref.watch(lastReadProvider).valueOrNull;
-    final surah = lastRead == null
-        ? null
-        : ref.watch(surahOfAyahProvider(lastRead)).valueOrNull;
-    final ayah = lastRead == null
-        ? null
-        : ref.watch(ayahProvider(lastRead)).valueOrNull;
+    final surah =
+        lastRead == null
+            ? null
+            : ref.watch(surahOfAyahProvider(lastRead)).valueOrNull;
+    final ayah =
+        lastRead == null ? null : ref.watch(ayahProvider(lastRead)).valueOrNull;
 
     void open() {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => QuranReaderScreen(
-            surah: surah?.number ?? 1,
-            focusAyah: lastRead,
-          ),
+          builder:
+              (_) => QuranReaderScreen(
+                surah: surah?.number ?? 1,
+                focusAyah: lastRead,
+              ),
         ),
       );
     }
@@ -132,10 +139,24 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
       onTap: open,
       child: Row(
         children: [
-          StarNumber(
-            number: surah?.number ?? 1,
-            size: 44,
-            filled: true,
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AlimColors.gold.withValues(alpha: 0.12),
+              border: Border.all(
+                color: AlimColors.gold.withValues(alpha: 0.40),
+              ),
+            ),
+            child: Icon(
+              lastRead == null
+                  ? Icons.menu_book_rounded
+                  : Icons.play_arrow_rounded,
+              color: AlimColors.gold,
+              size: 22,
+            ),
           ),
           const SizedBox(width: AlimSpace.md),
           Expanded(
@@ -162,7 +183,7 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
               ],
             ),
           ),
-          const Icon(Icons.play_arrow_rounded, color: AlimColors.gold, size: 28),
+          const Icon(Icons.chevron_right, color: AlimColors.gold, size: 22),
         ],
       ),
     );
@@ -194,65 +215,90 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
   }
 
   Widget _surahCard(Surah s) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AlimSpace.sm),
-      child: AlimCard(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AlimSpace.md,
-          vertical: AlimSpace.sm,
-        ),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => QuranReaderScreen(surah: s.number),
-          ),
-        ),
-        child: Row(
-          children: [
-            StarNumber(number: s.number, size: 42),
-            const SizedBox(width: AlimSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    s.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15.5,
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(AlimRadius.field),
+          onTap:
+              () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => QuranReaderScreen(surah: s.number),
+                ),
+              ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AlimColors.gold.withValues(
+                      alpha: dark ? 0.12 : 0.10,
+                    ),
+                    border: Border.all(
+                      color: AlimColors.gold.withValues(alpha: 0.35),
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Row(
+                  child: Text(
+                    '${s.number}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AlimColors.gold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AlimSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      AlimPill(
-                        label: '${s.ayat} ayat',
-                        color: AlimColors.mutedOf(context),
+                      Text(
+                        s.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15.5,
+                        ),
                       ),
-                      const SizedBox(width: 6),
-                      AlimPill(
-                        label: s.revelation,
-                        color: s.revelation == 'Mecca'
-                            ? AlimColors.gold
-                            : Theme.of(context).colorScheme.primary,
+                      const SizedBox(height: 3),
+                      Text(
+                        '${s.meaning} · ${s.ayat} ayat · ${s.revelation}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AlimColors.mutedOf(context),
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: AlimSpace.sm),
+                Text(
+                  s.nameAr,
+                  textDirection: TextDirection.rtl,
+                  style: const TextStyle(
+                    fontFamily: arabicFamily,
+                    fontSize: 22,
+                    color: AlimColors.gold,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AlimSpace.sm),
-            Text(
-              s.nameAr,
-              textDirection: TextDirection.rtl,
-              style: const TextStyle(
-                fontFamily: arabicFamily,
-                fontSize: 21,
-                color: AlimColors.gold,
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: AlimColors.hairlineOf(context).withValues(alpha: 0.55),
+        ),
+      ],
     );
   }
 
@@ -261,7 +307,8 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
       return const Padding(
         padding: EdgeInsets.all(AlimSpace.lg),
         child: EmptyNote(
-          text: 'Nothing found. Try another word. Alim looks past the '
+          text:
+              'Nothing found. Try another word. Alim looks past the '
               'diacritics in Arabic.',
           icon: Icons.search_off,
         ),
@@ -281,14 +328,16 @@ class _QuranListScreenState extends ConsumerState<QuranListScreen> {
         return Padding(
           padding: const EdgeInsets.only(bottom: AlimSpace.sm),
           child: AlimCard(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => QuranReaderScreen(
-                  surah: a.surah,
-                  focusAyah: a.number,
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder:
+                        (_) => QuranReaderScreen(
+                          surah: a.surah,
+                          focusAyah: a.number,
+                        ),
+                  ),
                 ),
-              ),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -340,50 +389,51 @@ class JuzListScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('By Juz')),
       body: switch (starts) {
         AsyncData(:final value) => GridView.builder(
-            padding: const EdgeInsets.fromLTRB(
-              AlimSpace.lg,
-              AlimSpace.sm,
-              AlimSpace.lg,
-              AlimSpace.xxl,
-            ),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: AlimSpace.sm,
-              crossAxisSpacing: AlimSpace.sm,
-              childAspectRatio: 1.5,
-            ),
-            itemCount: value.length,
-            itemBuilder: (context, i) {
-              return AlimCard(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => MushafScreen(initialAyah: value[i]),
-                  ),
-                ),
-                padding: const EdgeInsets.all(AlimSpace.sm),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Juz ${i + 1}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'from ayah ${value[i]}',
-                      style: TextStyle(
-                        color: AlimColors.mutedOf(context),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+          padding: const EdgeInsets.fromLTRB(
+            AlimSpace.lg,
+            AlimSpace.sm,
+            AlimSpace.lg,
+            AlimSpace.xxl,
           ),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: AlimSpace.sm,
+            crossAxisSpacing: AlimSpace.sm,
+            childAspectRatio: 1.5,
+          ),
+          itemCount: value.length,
+          itemBuilder: (context, i) {
+            return AlimCard(
+              onTap:
+                  () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => MushafScreen(initialAyah: value[i]),
+                    ),
+                  ),
+              padding: const EdgeInsets.all(AlimSpace.sm),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Juz ${i + 1}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'from ayah ${value[i]}',
+                    style: TextStyle(
+                      color: AlimColors.mutedOf(context),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
         AsyncError(:final error) => Center(child: Text('$error')),
         _ => const Center(child: CircularProgressIndicator()),
       },

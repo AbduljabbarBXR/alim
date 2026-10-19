@@ -330,7 +330,12 @@ class Profile {
     this.translation = 'sahih',
     this.arabicScale = 1.0,
     this.darkMode = false,
+    this.themeMode = 'system',
     this.reciter = 'alafasy',
+    this.downloadBeforePlay = true,
+    this.adhanOn = false,
+    this.adhanSound = 'short',
+    this.adhanPrayers = 'fajr,dhuhr,asr,maghrib,isha',
     this.reminderHour = 20,
     this.reminderMinute = 0,
     this.reminderOn = false,
@@ -344,7 +349,12 @@ class Profile {
   final String translation;
   final double arabicScale;
   final bool darkMode;
+  final String themeMode;
   final String reciter;
+  final bool downloadBeforePlay;
+  final bool adhanOn;
+  final String adhanSound;
+  final String adhanPrayers;
   final int reminderHour;
   final int reminderMinute;
   final bool reminderOn;
@@ -358,7 +368,12 @@ class Profile {
     String? translation,
     double? arabicScale,
     bool? darkMode,
+    String? themeMode,
     String? reciter,
+    bool? downloadBeforePlay,
+    bool? adhanOn,
+    String? adhanSound,
+    String? adhanPrayers,
     int? reminderHour,
     int? reminderMinute,
     bool? reminderOn,
@@ -371,6 +386,12 @@ class Profile {
     translation: translation ?? this.translation,
     arabicScale: arabicScale ?? this.arabicScale,
     darkMode: darkMode ?? this.darkMode,
+    themeMode: themeMode ?? this.themeMode,
+    reciter: reciter ?? this.reciter,
+    downloadBeforePlay: downloadBeforePlay ?? this.downloadBeforePlay,
+    adhanOn: adhanOn ?? this.adhanOn,
+    adhanSound: adhanSound ?? this.adhanSound,
+    adhanPrayers: adhanPrayers ?? this.adhanPrayers,
     reminderHour: reminderHour ?? this.reminderHour,
     reminderMinute: reminderMinute ?? this.reminderMinute,
     reminderOn: reminderOn ?? this.reminderOn,

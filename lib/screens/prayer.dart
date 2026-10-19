@@ -22,9 +22,10 @@ class PrayerScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'Qibla',
             icon: const Icon(Icons.explore_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const QiblaScreen()),
-            ),
+            onPressed:
+                () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const QiblaScreen())),
           ),
           IconButton(
             tooltip: 'Update location',
@@ -34,9 +35,11 @@ class PrayerScreen extends ConsumerWidget {
         ],
       ),
       body: schedule.when(
-        data: (day) => day == null
-            ? _needsLocation(context, ref)
-            : _times(context, ref, day, profile),
+        data:
+            (day) =>
+                day == null
+                    ? _needsLocation(context, ref)
+                    : _times(context, ref, day, profile),
         error: (e, _) => Center(child: Text('$e')),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
@@ -48,7 +51,8 @@ class PrayerScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(AlimSpace.lg),
       children: [
         EmptyNote(
-          text: 'Prayer times are worked out from your coordinates. Allow '
+          text:
+              'Prayer times are worked out from your coordinates. Allow '
               'location once and Alim remembers it on this device.',
           icon: Icons.place_outlined,
         ),
@@ -137,9 +141,10 @@ class PrayerScreen extends ConsumerWidget {
               for (final p in AlimPrayer.values)
                 _row(
                   context,
-                  label: p == AlimPrayer.dhuhr && friday
-                      ? 'Jumu\'ah'
-                      : prayerLabel(p),
+                  label:
+                      p == AlimPrayer.dhuhr && friday
+                          ? 'Jumu\'ah'
+                          : prayerLabel(p),
                   at: day.timeOf(p),
                   highlight: p == next,
                   primary: primary,
@@ -147,13 +152,34 @@ class PrayerScreen extends ConsumerWidget {
             ],
           ),
         ),
+        const SizedBox(height: AlimSpace.sm),
+        AlimCard(
+          padding: EdgeInsets.zero,
+          child: SwitchListTile(
+            secondary: Icon(
+              profile.adhanOn ? Icons.campaign : Icons.campaign_outlined,
+              color: profile.adhanOn ? AlimColors.gold : null,
+            ),
+            title: Text(profile.adhanOn ? 'The adhan is on' : 'Hear the adhan'),
+            subtitle: Text(
+              profile.adhanOn
+                  ? 'It sounds at each chosen prayer time'
+                  : 'Let the call sound at prayer time',
+            ),
+            value: profile.adhanOn,
+            onChanged: (value) async {
+              final messenger = ScaffoldMessenger.of(context);
+              final problem = await ref.read(actionsProvider).setAdhan(value);
+              if (problem != null) {
+                messenger.showSnackBar(SnackBar(content: Text(problem)));
+              }
+            },
+          ),
+        ),
         const SizedBox(height: AlimSpace.xs),
         Text(
           'Your place: ${day.place}. Nothing leaves the device.',
-          style: TextStyle(
-            color: AlimColors.mutedOf(context),
-            fontSize: 12,
-          ),
+          style: TextStyle(color: AlimColors.mutedOf(context), fontSize: 12),
         ),
         const SectionHeader('Calculation'),
         AlimCard(
@@ -167,7 +193,9 @@ class PrayerScreen extends ConsumerWidget {
             ],
             onSelected: (value) {
               if (value == null) return;
-              ref.read(actionsProvider).saveProfile(
+              ref
+                  .read(actionsProvider)
+                  .saveProfile(
                     ref.read(profileProvider).copyWith(prayerMethod: value),
                   );
             },
@@ -180,9 +208,12 @@ class PrayerScreen extends ConsumerWidget {
             title: const Text('Hanafi Asr'),
             subtitle: const Text('Asr begins later, at twice the shadow'),
             value: profile.asrHanafi,
-            onChanged: (value) => ref.read(actionsProvider).saveProfile(
-                  ref.read(profileProvider).copyWith(asrHanafi: value),
-                ),
+            onChanged:
+                (value) => ref
+                    .read(actionsProvider)
+                    .saveProfile(
+                      ref.read(profileProvider).copyWith(asrHanafi: value),
+                    ),
           ),
         ),
         const SizedBox(height: AlimSpace.sm),
