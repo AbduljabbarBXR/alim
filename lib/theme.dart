@@ -105,7 +105,7 @@ ThemeData buildAlimTheme(Brightness brightness) {
         color: scheme.onSurface,
       ),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: dark ? AlimColors.nightSurface : AlimColors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
