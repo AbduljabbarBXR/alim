@@ -55,7 +55,12 @@ def main() -> None:
     info = load("quran_info.json")
     ar = load("quran_ar.min.json")["quran"]
     en = load("quran_en.min.json")["quran"]
-    stories = load(os.path.join(ROOT, "tool", "stories.json"))["stories"]
+    stories = []
+    for part in ("a", "b", "c", "d"):
+        path = os.path.join(ROOT, "tool", f"stories_{part}.json")
+        with open(path, encoding="utf-8") as fh:
+            stories.extend(json.load(fh)["stories"])
+    stories.sort(key=lambda s: s["id"])
 
     if os.path.exists(OUT):
         os.remove(OUT)
@@ -128,7 +133,9 @@ def main() -> None:
             lesson TEXT NOT NULL,
             ayah_ref TEXT,
             ayah_number INTEGER,
-            words INTEGER NOT NULL
+            words INTEGER NOT NULL,
+            hadith_id INTEGER,
+            hadith_ref TEXT
         );
 
         -- User data. Created here so a fresh install has its tables waiting;
@@ -242,19 +249,26 @@ def main() -> None:
                 (cid, int(num), title or f"Book {num}"),
             )
         rows = []
+        blank = 0
         for he, ha in zip(e["hadiths"], a["hadiths"]):
             ref = he.get("reference") or {}
             book = int(ref.get("book", 0) or 0)
             text_en = he["text"].strip()
+            text_ar = ha["text"].strip()
+            # A handful of dataset rows carry no text in either language.
+            # They render as blank cards, so they are dropped here.
+            if not text_en or not text_ar:
+                blank += 1
+                continue
             rows.append(
                 (
                     cid,
                     book,
                     int(he.get("hadithnumber", 0) or 0),
                     text_en,
-                    ha["text"].strip(),
+                    text_ar,
                     normalize_en(text_en),
-                    normalize_ar(ha["text"]),
+                    normalize_ar(text_ar),
                     1 if len(text_en) <= 650 else 0,
                 )
             )
@@ -264,9 +278,11 @@ def main() -> None:
         )
         c.execute(
             "INSERT INTO hadith_collection VALUES (?,?,?,?,?)",
-            (cid, name, ar_full, blurb, len(e["hadiths"])),
+            (cid, name, ar_full, blurb, len(rows)),
         )
-        hadith_total += len(e["hadiths"])
+        hadith_total += len(rows)
+        if blank:
+            print(f"  {cid}: dropped {blank} blank rows")
 
     # --- Stories ---------------------------------------------------------
     ayah_lookup = {}
@@ -275,14 +291,48 @@ def main() -> None:
         gn += 1
         ayah_lookup[f"{a['chapter']}:{a['verse']}"] = gn
 
+    names = {cid: display for cid, _en, _ar, display, _full, _blurb in collections}
+
+    # Every story reference is resolved against the bundled corpus, so a
+    # reference on screen always points at a real row in this database.
+    print("-- hadith references for stories --")
     story_total_words = 0
     for s in stories:
         ref = s["ayah"]
         number = ayah_lookup.get(ref) if ref else None
         words = sum(len(p.split()) for p in s["body"])
         story_total_words += words
+
+        hid = href = None
+        phrase = s.get("hadith_search")
+        if phrase:
+            needle = f"%{phrase.lower()}%"
+            total = c.execute(
+                "SELECT COUNT(*) FROM hadith WHERE en_search LIKE ?",
+                (needle,),
+            ).fetchone()[0]
+            matches = c.execute(
+                "SELECT id, collection, number_in_book, substr(text_en, 1, 78) "
+                "FROM hadith WHERE en_search LIKE ? ORDER BY id LIMIT 3",
+                (needle,),
+            ).fetchall()
+            if matches:
+                first = matches[0]
+                hid = first[0]
+                href = f"{names.get(first[1], first[1])} no. {first[2]}"
+                print(f"  story {s['id']:>2} OK ({total}) {href}: {first[3]}")
+                for alt in matches[1:]:
+                    print(
+                        f"           alt {names.get(alt[1], alt[1])} "
+                        f"no. {alt[2]}: {alt[3]}"
+                    )
+            else:
+                print(f"  story {s['id']:>2} MISS  {phrase!r}")
+        else:
+            print(f"  story {s['id']:>2} none")
+
         c.execute(
-            "INSERT INTO story VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO story VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
                 s["id"],
                 s["category"],
@@ -293,10 +343,12 @@ def main() -> None:
                 ref,
                 number,
                 words,
+                hid,
+                href,
             ),
         )
 
-    c.execute("INSERT INTO meta VALUES ('db_version', '1')")
+    c.execute("INSERT INTO meta VALUES ('db_version', '2')")
     c.execute("INSERT INTO meta VALUES ('ayatod', '')")
     c.execute("INSERT INTO meta VALUES ('quran_source', 'Uthmani Hafs text, fawazahmed0/quran-api (public domain)')")
     c.execute("INSERT INTO meta VALUES ('quran_translation', 'Abdullah Yusuf Ali (1934, public domain)')")

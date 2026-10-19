@@ -5,11 +5,13 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../services/daily.dart';
+import '../services/prayer.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'dhikr.dart';
 import 'hadith.dart';
+import 'prayer.dart';
 import 'quran_reader.dart';
 import 'stories.dart';
 
@@ -134,8 +136,47 @@ class TodayScreen extends ConsumerWidget {
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ),
+            const SizedBox(height: AlimSpace.sm),
+            _prayerRow(context, ref),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _prayerRow(BuildContext context, WidgetRef ref) {
+    final day = ref.watch(prayerScheduleProvider).valueOrNull;
+    final at = day?.timeOf(day.next);
+    return AlimCard(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const PrayerScreen()),
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AlimSpace.md,
+        vertical: AlimSpace.sm,
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.access_time, size: 17, color: AlimColors.gold),
+          const SizedBox(width: AlimSpace.sm),
+          Expanded(
+            child: Text(
+              at == null
+                  ? 'Set your place for prayer times and qibla'
+                  : '${prayerLabel(day!.next)} at '
+                      '${TimeOfDay.fromDateTime(at).format(context)}',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Icon(
+            Icons.chevron_right,
+            size: 18,
+            color: AlimColors.mutedOf(context),
+          ),
+        ],
       ),
     );
   }
@@ -316,7 +357,7 @@ class TodayScreen extends ConsumerWidget {
                 tooltip: 'Share',
                 icon: const Icon(Icons.ios_share, size: 19),
                 onPressed: () => Share.share(
-                  '${verse.textAr}\n\n${verse.textEn}\n— Qur\'an ${verse.surah}:${verse.ayah}',
+                  '${verse.textAr}\n\n${verse.textEn}\nQur\'an ${verse.surah}:${verse.ayah}',
                 ),
               ),
               IconButton(
@@ -339,8 +380,11 @@ class TodayScreen extends ConsumerWidget {
   }
 
   Widget _hadithCard(BuildContext context, WidgetRef ref, Hadith hadith) {
-    final learnedToday =
-        (ref.watch(todayLogProvider).valueOrNull?.hadiths ?? 0) > 0;
+    final learnedToday = ref
+            .watch(hadithReadSetProvider)
+            .valueOrNull
+            ?.contains(hadith.id) ??
+        false;
     return AlimCard(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => HadithDetailScreen(hadith: hadith)),

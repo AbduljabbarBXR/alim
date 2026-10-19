@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'data/store.dart';
 import 'models.dart';
 import 'services/daily.dart';
+import 'services/location.dart';
+import 'services/prayer.dart';
 
 /// The store is built in main() and injected here.
 final storeProvider = Provider<AlimStore>(
@@ -56,6 +58,8 @@ class ProfileNotifier extends StateNotifier<Profile> {
         reminderHour: m['reminderHour'] as int? ?? 20,
         reminderMinute: m['reminderMinute'] as int? ?? 0,
         reminderOn: m['reminderOn'] as bool? ?? false,
+        prayerMethod: m['prayerMethod'] as String? ?? 'muslimWorldLeague',
+        asrHanafi: m['asrHanafi'] as bool? ?? false,
       );
     } catch (_) {
       // A corrupt profile is not worth crashing over; defaults stand.
@@ -75,6 +79,8 @@ class ProfileNotifier extends StateNotifier<Profile> {
       'reminderHour': next.reminderHour,
       'reminderMinute': next.reminderMinute,
       'reminderOn': next.reminderOn,
+      'prayerMethod': next.prayerMethod,
+      'asrHanafi': next.asrHanafi,
     }));
   }
 }
@@ -107,6 +113,19 @@ final searchProvider =
     FutureProvider.family<List<Ayah>, String>((ref, query) async {
   if (query.trim().length < 2) return const [];
   return ref.watch(storeProvider).searchAyat(query);
+});
+
+final juzStartsProvider = FutureProvider<List<int>>((ref) {
+  return ref.watch(storeProvider).juzStarts();
+});
+
+final pageCountProvider = FutureProvider<int>((ref) {
+  return ref.watch(storeProvider).pageCount();
+});
+
+final pageAyatProvider =
+    FutureProvider.family<List<Ayah>, int>((ref, page) {
+  return ref.watch(storeProvider).ayatOfPage(page);
 });
 
 final ayahProvider = FutureProvider.family<Ayah, int>((ref, number) {
@@ -178,6 +197,32 @@ final surahOfAyahProvider = FutureProvider.family<Surah, int>((ref, ayah) {
   return ref.watch(storeProvider).surahOfAyah(ayah);
 });
 
+/// The remembered place, when one was set. Null means prayer times and the
+/// qibla have nothing to work from yet.
+final locationProvider = FutureProvider<AlimLocation?>((ref) async {
+  ref.watch(revisionProvider);
+  final raw = await ref.watch(storeProvider).kvGet('location');
+  if (raw == null) return null;
+  final parts = raw.split(',');
+  if (parts.length != 2) return null;
+  final lat = double.tryParse(parts[0]);
+  final lng = double.tryParse(parts[1]);
+  if (lat == null || lng == null) return null;
+  return AlimLocation(lat, lng);
+});
+
+final prayerScheduleProvider = FutureProvider<PrayerDay?>((ref) async {
+  final place = await ref.watch(locationProvider.future);
+  if (place == null) return null;
+  final profile = ref.watch(profileProvider);
+  return PrayerDay.forPlace(
+    place: place,
+    day: ref.watch(todayProvider),
+    method: profile.prayerMethod,
+    asrHanafi: profile.asrHanafi,
+  );
+});
+
 // -------------------------------------------------------------- user data
 
 final lastReadProvider = FutureProvider<int?>((ref) {
@@ -243,6 +288,19 @@ final readSetProvider = FutureProvider<Set<int>>((ref) async {
   ref.watch(revisionProvider);
   final date = dayKey(ref.watch(todayProvider));
   final raw = await ref.watch(storeProvider).kvGet('read_set_$date') ?? '';
+  return raw
+      .split(',')
+      .where((s) => s.isNotEmpty)
+      .map(int.parse)
+      .toSet();
+});
+
+/// Hadith ids counted as learned today, so each hadith counts once per day.
+final hadithReadSetProvider = FutureProvider<Set<int>>((ref) async {
+  ref.watch(revisionProvider);
+  final date = dayKey(ref.watch(todayProvider));
+  final raw =
+      await ref.watch(storeProvider).kvGet('hadith_read_set_$date') ?? '';
   return raw
       .split(',')
       .where((s) => s.isNotEmpty)
@@ -323,10 +381,23 @@ class AlimActions {
     await _settle(before);
   }
 
-  Future<void> learnedHadith() async {
+  /// Counts a hadith as learned today. The first time a given hadith is
+  /// opened today it adds to the day; opening the same hadith again, or any
+  /// other hadith opened again, does not double count.
+  Future<bool> learnedHadith(int hadithId) async {
+    final key = 'hadith_read_set_$_today';
+    final raw = await _store.kvGet(key) ?? '';
+    final read = raw.split(',').where((s) => s.isNotEmpty).toSet();
+    if (read.contains('$hadithId')) {
+      _bump();
+      return false;
+    }
+    read.add('$hadithId');
+    await _store.kvSet(key, read.join(','));
     final before = await _logNow();
     await _store.addHadiths(_today, 1);
     await _settle(before);
+    return true;
   }
 
   Future<void> readStory(int id) async {
@@ -346,7 +417,6 @@ class AlimActions {
     final key = 'read_set_$_today';
     final raw = await _store.kvGet(key) ?? '';
     final read = raw.split(',').where((s) => s.isNotEmpty).toSet();
-    await _store.setLastRead(ayahNumber);
     if (read.contains('$ayahNumber')) {
       _bump();
       return false;
@@ -361,6 +431,21 @@ class AlimActions {
 
   Future<void> setLastRead(int ayahNumber) async {
     await _store.setLastRead(ayahNumber);
+    _bump();
+  }
+
+  /// Reads a fresh fix and remembers it. Null means the person said no, the
+  /// location service is off, or the sky did not answer in time.
+  Future<AlimLocation?> locate() async {
+    final place = await LocationService.current();
+    if (place == null) return null;
+    await _store.kvSet('location', '${place.latitude},${place.longitude}');
+    _bump();
+    return place;
+  }
+
+  Future<void> forgetLocation() async {
+    await _store.kvSet('location', '');
     _bump();
   }
 
@@ -415,7 +500,7 @@ final badges = <AlimBadge>[
   AlimBadge('hadith-40', 'Forty hadith', 'Forty authentic hadith learned', (s) => s.hadiths >= 40),
   AlimBadge('hadith-500', 'Companion of hadith', 'Five hundred hadith learned', (s) => s.hadiths >= 500),
   AlimBadge('dhikr-1000', 'Tongue moist', 'A thousand remembrances', (s) => s.dhikr >= 1000),
-  AlimBadge('story-all', 'The story keeper', 'Every story read', (s) => s.stories >= 14),
+  AlimBadge('story-all', 'The story keeper', 'Every story read', (s) => s.stories >= 46),
   AlimBadge('perfect', 'A perfect day', 'Every task of a day completed', (s) => s.perfectDays >= 1),
   AlimBadge('perfect-7', 'Perfect week', 'Seven perfect days', (s) => s.perfectDays >= 7),
   AlimBadge('bookmarks', 'Thread keeper', 'Ten bookmarks saved', (s) => s.bookmarks >= 10),

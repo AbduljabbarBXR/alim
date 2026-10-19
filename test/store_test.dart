@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:alim/data/store.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -103,16 +104,52 @@ void main() {
     });
   });
 
+  group('pages and juz', () {
+    test('the mushaf has 604 pages', () async {
+      expect(await store.pageCount(), 604);
+    });
+
+    test('a page arrives in order and a place maps back to its page', () async {
+      final ayat = await store.ayatOfPage(1);
+      expect(ayat, isNotEmpty);
+      expect(ayat.first.surah, 1);
+      expect(ayat.first.ayah, 1);
+      expect(await store.pageOfAyah(1), 1);
+      final kursi = await store.ayahAt(2, 255);
+      expect(await store.pageOfAyah(kursi.number), kursi.page);
+    });
+
+    test('thirty juz in order', () async {
+      final starts = await store.juzStarts();
+      expect(starts, hasLength(30));
+      expect(starts.first, 1);
+      expect(starts, orderedEquals(List.of(starts)..sort()));
+    });
+  });
+
   group('the stories', () {
-    test('fourteen stories, each with a body and a lesson', () async {
+    test('forty-six stories, each with a body and a lesson', () async {
       final stories = await store.stories();
-      expect(stories, hasLength(14));
+      expect(stories, hasLength(46));
       for (final s in stories) {
         expect(s.paragraphs, isNotEmpty);
         expect(s.lesson, isNotEmpty);
         expect(s.minutes, greaterThan(0));
       }
-      expect(stories.where((s) => s.ayahNumber != null), isNotEmpty);
+      expect(stories.where((s) => s.ayahNumber != null), hasLength(44));
+
+      final sourced = stories.where((s) => s.hadithId != null).toList();
+      expect(sourced, hasLength(12));
+      for (final s in sourced) {
+        expect(s.hadithRef, isNotNull);
+        expect(s.hadithRef, contains('no.'));
+        final source = await store.hadithById(s.hadithId!);
+        expect(source.textEn, isNotEmpty);
+      }
+
+      expect(stories.where((s) => s.category == 'Prophets'), hasLength(25));
+      expect(stories.where((s) => s.category == 'Companions'), hasLength(12));
+      expect(stories.where((s) => s.category == 'Chosen'), hasLength(9));
     });
   });
 
@@ -197,5 +234,25 @@ void main() {
       expect(await store.bookmarks(), isEmpty);
       expect(await store.todos(), isEmpty);
     });
+  });
+
+  test('a new library lands without wiping the record', () async {
+    final dir = await Directory.systemTemp.createTemp('alim_upgrade_test');
+    final before = await AlimStore.open(overridePath: dir.path);
+    await before.kvSet('marker', 'kept');
+    await before.setLastRead(262);
+    await before.close();
+
+    final raw = await databaseFactory.openDatabase(p.join(dir.path, 'alim.db'));
+    await raw.update('meta', {'value': '1'},
+        where: 'key = ?', whereArgs: ['db_version']);
+    await raw.close();
+
+    final after = await AlimStore.open(overridePath: dir.path);
+    expect(await after.kvGet('marker'), 'kept');
+    expect(await after.lastRead(), 262);
+    expect(await after.stories(), hasLength(46));
+    await after.close();
+    await dir.delete(recursive: true);
   });
 }

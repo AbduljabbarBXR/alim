@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
+import '../services/companion.dart';
 import '../services/notifications.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'companion.dart';
 import 'onboarding.dart';
+import 'prayer.dart';
+import 'qibla.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -170,7 +174,7 @@ class SettingsScreen extends ConsumerWidget {
                 const Divider(height: 1),
                 SwitchListTile(
                   secondary: const Icon(Icons.dark_mode_outlined),
-                  title: const Text('Night reading'),
+                  title: const Text('Dark mode'),
                   subtitle: const Text('A darker palette for late hours'),
                   value: profile.darkMode,
                   onChanged: (v) =>
@@ -179,8 +183,61 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
           ),
-          const SectionHeader('About the sources'),
+          const SectionHeader('Place and prayer'),
           AlimCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.place_outlined),
+                  title: const Text('Location'),
+                  subtitle: Text(
+                    ref.watch(locationProvider).valueOrNull == null
+                        ? 'Not set. Needed for prayer times and the qibla.'
+                        : '${ref.watch(locationProvider).valueOrNull}',
+                  ),
+                  trailing: const Icon(Icons.my_location, size: 19),
+                  onTap: () => acquireLocation(context, ref),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.access_time),
+                  title: const Text('Prayer times'),
+                  subtitle: const Text('Calculated for your coordinates'),
+                  trailing: const Icon(Icons.chevron_right, size: 19),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const PrayerScreen()),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.explore_outlined),
+                  title: const Text('Qibla'),
+                  subtitle: const Text('A compass to the Kaaba'),
+                  trailing: const Icon(Icons.chevron_right, size: 19),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const QiblaScreen()),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (companionEnabled) ...[
+            const SectionHeader('Companion'),
+            AlimCard(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.auto_awesome_outlined),
+                title: const Text('Study companion'),
+                subtitle: const Text('Ask about what you are reading'),
+                trailing: const Icon(Icons.chevron_right, size: 19),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CompanionScreen()),
+                ),
+              ),
+            ),
+          ],
+          const SectionHeader('About the sources'),          AlimCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -188,10 +245,11 @@ class SettingsScreen extends ConsumerWidget {
                   'Qur\'an: the Uthmani script with the Yusuf Ali '
                       'translation of 1934 (public domain), all 6,236 ayat.',
                   'Hadith: Sahih al-Bukhari, Sahih Muslim, an-Nawawi\'s '
-                      'Forty, and the hadith Qudsi — every one of them '
+                      'Forty, and the hadith Qudsi, every one of them '
                       'authentic.',
-                  'Stories: fourteen tellings written for Alim, each anchored '
-                      'to an ayah.',
+                  'Stories: forty-six tellings written for Alim, each '
+                      'anchored to an ayah, and where possible to the '
+                      'hadith that carries it.',
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: AlimSpace.sm),

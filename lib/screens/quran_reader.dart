@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
@@ -7,6 +9,7 @@ import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'hadith.dart';
+import 'mushaf.dart';
 import 'stories.dart';
 
 class QuranReaderScreen extends ConsumerStatefulWidget {
@@ -22,39 +25,13 @@ class QuranReaderScreen extends ConsumerStatefulWidget {
 }
 
 class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
-  ScrollController? _controller;
   bool _translation = true;
+  bool _announced = false;
 
   @override
   void initState() {
     super.initState();
     _translation = ref.read(profileProvider).translationOn;
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  /// Estimates where an ayah sits in the list. Ayat vary wildly in length, so
-  /// the guess uses the Arabic text length at the reader's font scale.
-  double _estimateOffset(List<Ayah> ayat, int index, double scale) {
-    var y = 8.0;
-    for (var i = 0; i < index; i++) {
-      y += _estimateHeight(ayat[i], scale);
-    }
-    return y;
-  }
-
-  double _estimateHeight(Ayah a, double scale) {
-    final arFont = 24 * scale;
-    final arCharsPerLine = 380 / (arFont * 0.52);
-    final arLines = (a.textAr.length / arCharsPerLine).ceil().clamp(1, 40);
-    final arHeight = arLines * arFont * 1.9;
-    final enLines = (a.textEn.length / 46).ceil().clamp(1, 30);
-    final enHeight = _translation ? enLines * 14.5 * 1.6 + 8 : 0.0;
-    return arHeight + enHeight + 78;
   }
 
   @override
@@ -64,6 +41,12 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
     final read = ref.watch(readSetProvider).valueOrNull ?? const <int>{};
     final surah = view.valueOrNull?.surah;
     final lastRead = ref.watch(lastReadProvider).valueOrNull;
+    final bookmarkedAyat = ref
+            .watch(bookmarksProvider('ayah'))
+            .valueOrNull
+            ?.map((b) => b.ref)
+            .toSet() ??
+        const <int>{};
 
     return Scaffold(
       appBar: AppBar(
@@ -83,6 +66,21 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Mushaf page',
+            icon: const Icon(Icons.import_contacts_outlined),
+            onPressed: view.valueOrNull == null
+                ? null
+                : () {
+                    final target = widget.focusAyah ??
+                        view.valueOrNull!.ayat.first.number;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => MushafScreen(initialAyah: target),
+                      ),
+                    );
+                  },
+          ),
           IconButton(
             tooltip: _translation ? 'Hide translation' : 'Show translation',
             icon: Icon(
@@ -106,6 +104,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
             profile.arabicScale,
             read,
             lastRead,
+            bookmarkedAyat,
           ),
         AsyncError(:final error) => Center(child: Text('$error')),
         _ => const Center(child: CircularProgressIndicator()),
@@ -119,37 +118,38 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
     double scale,
     Set<int> read,
     int? lastRead,
+    Set<int> bookmarkedAyat,
   ) {
     final focusIndex = widget.focusAyah == null
         ? null
         : view.ayat.indexWhere((a) => a.number == widget.focusAyah);
-    if (_controller == null) {
-      final offset = focusIndex == null || focusIndex <= 0
-          ? 0.0
-          : _estimateOffset(view.ayat, focusIndex, scale);
-      _controller = ScrollController(initialScrollOffset: offset);
-      if (offset > 0) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Landed near ayah ${view.ayat[focusIndex!].ayah}. Tap ayat '
-                  'to count them.',
-                ),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-        });
-      }
-    }
 
     final showBismillah = view.surah.number != 1 && view.surah.number != 9;
     final headerCount = showBismillah ? 2 : 1;
 
-    return ListView.builder(
-      controller: _controller,
+    // Landing exactly on a chosen ayah: the list is lazy, so the position is
+    // addressed by item index, never by a guessed scroll offset.
+    if (focusIndex != null && focusIndex > 0 && !_announced) {
+      _announced = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${view.surah.name} ${view.ayat[focusIndex].ayah} is '
+                'highlighted below.',
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      });
+    }
+
+    return ScrollablePositionedList.builder(
+      initialScrollIndex:
+          focusIndex == null || focusIndex <= 0 ? 0 : focusIndex + headerCount,
+      initialAlignment: 0.02,
       padding: const EdgeInsets.fromLTRB(
         AlimSpace.lg,
         AlimSpace.sm,
@@ -181,23 +181,12 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
           translation: _translation,
           isRead: isRead,
           isLastRead: lastRead == ayah.number,
+          bookmarked: bookmarkedAyat.contains(ayah.number),
           focused: focused,
-          onRead: () async {
-            final messenger = ScaffoldMessenger.of(context);
-            final first =
-                await ref.read(actionsProvider).markAyahRead(ayah.number);
-            if (first) {
-              messenger
-                ..clearSnackBars()
-                ..showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '${view.surah.name} ${ayah.ayah} counted today.',
-                    ),
-                    duration: const Duration(milliseconds: 900),
-                  ),
-                );
-            }
+          onTap: () async {
+            await ref.read(actionsProvider).markAyahRead(ayah.number);
+            if (!context.mounted) return;
+            showAyahSheet(context, ref, ayah, view.surah.name);
           },
         );
       },
@@ -255,8 +244,9 @@ class _AyahTile extends StatelessWidget {
     required this.translation,
     required this.isRead,
     required this.isLastRead,
+    required this.bookmarked,
     required this.focused,
-    required this.onRead,
+    required this.onTap,
   });
 
   final Ayah ayah;
@@ -265,8 +255,9 @@ class _AyahTile extends StatelessWidget {
   final bool translation;
   final bool isRead;
   final bool isLastRead;
+  final bool bookmarked;
   final bool focused;
-  final VoidCallback onRead;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -279,11 +270,11 @@ class _AyahTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AlimSpace.sm),
       child: AlimCard(
         color: highlight,
-        onTap: onRead,
+        onTap: onTap,
         padding: const EdgeInsets.fromLTRB(
           AlimSpace.md,
           AlimSpace.md,
-          AlimSpace.sm,
+          AlimSpace.md,
           AlimSpace.sm,
         ),
         child: Column(
@@ -341,9 +332,13 @@ class _AyahTile extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (bookmarked) ...[
+                  const SizedBox(width: AlimSpace.xs),
+                  const Icon(Icons.bookmark, size: 14, color: AlimColors.gold),
+                ],
                 if (isLastRead) ...[
                   const SizedBox(width: AlimSpace.xs),
-                  AlimPill(
+                  const AlimPill(
                     label: 'Your place',
                     color: AlimColors.gold,
                   ),
@@ -355,19 +350,145 @@ class _AyahTile extends StatelessWidget {
                     color: AlimColors.rose,
                   ),
                 ],
-                const Spacer(),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Share',
-                  icon: const Icon(Icons.ios_share, size: 17),
-                  onPressed: () => Share.share(
-                    '${ayah.textAr}\n\n${ayah.textEn}\n— Qur\'an ${ayah.surah}:${ayah.ayah}',
-                  ),
-                ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// What a tap on an ayah offers: carry it out, or keep it.
+Future<void> showAyahSheet(
+  BuildContext context,
+  WidgetRef ref,
+  Ayah ayah,
+  String surahName,
+) {
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => _AyahSheet(ayah: ayah, surahName: surahName),
+  );
+}
+
+class _AyahSheet extends ConsumerWidget {
+  const _AyahSheet({required this.ayah, required this.surahName});
+
+  final Ayah ayah;
+  final String surahName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bookmarked =
+        ref.watch(bookmarkAtProvider(('ayah', ayah.number))).valueOrNull ??
+            false;
+    final isLastRead =
+        ref.watch(lastReadProvider).valueOrNull == ayah.number;
+    final readToday =
+        ref.watch(readSetProvider).valueOrNull?.contains(ayah.number) ?? false;
+    final label = '$surahName ${ayah.surah}:${ayah.ayah}';
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AlimSpace.lg,
+              0,
+              AlimSpace.lg,
+              AlimSpace.xs,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                if (readToday)
+                  AlimPill(
+                    label: 'Read today',
+                    color: Theme.of(context).colorScheme.primary,
+                    icon: Icons.check_circle_outline,
+                  ),
+                if (ayah.sajda) ...[
+                  const SizedBox(width: AlimSpace.xs),
+                  const AlimPill(label: 'Sajda', color: AlimColors.rose),
+                ],
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.ios_share),
+            title: const Text('Share'),
+            onTap: () {
+              Navigator.of(context).pop();
+              Share.share(
+                '${ayah.textAr}\n\n${ayah.textEn}\nQur\'an $label',
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.copy_all_outlined),
+            title: const Text('Copy'),
+            onTap: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              Navigator.of(context).pop();
+              await Clipboard.setData(
+                ClipboardData(text: '${ayah.textAr}\n\n${ayah.textEn}'),
+              );
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Ayah copied.')),
+              );
+            },
+          ),
+          ListTile(
+            leading: Icon(
+              bookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: bookmarked ? AlimColors.gold : null,
+            ),
+            title: Text(bookmarked ? 'Remove bookmark' : 'Bookmark'),
+            onTap: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              await ref
+                  .read(actionsProvider)
+                  .toggleBookmark('ayah', ayah.number, label);
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    bookmarked ? 'Bookmark removed.' : 'Bookmarked.',
+                  ),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: Icon(
+              isLastRead ? Icons.place : Icons.place_outlined,
+              color: isLastRead ? AlimColors.gold : null,
+            ),
+            title: Text(isLastRead ? 'This is your place' : 'Mark as last read'),
+            onTap: isLastRead
+                ? null
+                : () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.of(context).pop();
+                    await ref
+                        .read(actionsProvider)
+                        .setLastRead(ayah.number);
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Marked as your place.')),
+                    );
+                  },
+          ),
+          const SizedBox(height: AlimSpace.sm),
+        ],
       ),
     );
   }

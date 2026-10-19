@@ -122,6 +122,16 @@ class HadithBookScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final books = ref.watch(hadithBooksProvider(collection.id));
+    final loaded = books.valueOrNull;
+    // Collections like the Forty of an-Nawawi and the Hadith Qudsi carry a
+    // single body of text; going straight to it spares a pointless level.
+    if (loaded != null && loaded.length == 1) {
+      return HadithListScreen(
+        collection: collection,
+        book: loaded.single,
+        showBook: false,
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: Text(collection.name),
@@ -198,30 +208,36 @@ class HadithListScreen extends ConsumerWidget {
     super.key,
     required this.collection,
     required this.book,
+    this.showBook = true,
   });
 
   final HadithCollection collection;
   final HadithBook book;
+  final bool showBook;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final page = ref.watch(hadithPageProvider((collection.id, book.number, 0)));
+    final learnedToday =
+        ref.watch(hadithReadSetProvider).valueOrNull ?? const <int>{};
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(book.title, style: const TextStyle(fontSize: 16)),
-            Text(
-              '${collection.name} · book ${book.number}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: AlimColors.mutedOf(context),
-              ),
-            ),
-          ],
-        ),
+        title: showBook
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(book.title, style: const TextStyle(fontSize: 16)),
+                  Text(
+                    '${collection.name} · book ${book.number}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      color: AlimColors.mutedOf(context),
+                    ),
+                  ),
+                ],
+              )
+            : Text(collection.name),
       ),
       body: switch (page) {
         AsyncData(:final value) => ListView.separated(
@@ -235,6 +251,7 @@ class HadithListScreen extends ConsumerWidget {
             separatorBuilder: (_, _) => const SizedBox(height: AlimSpace.sm),
             itemBuilder: (context, i) {
               final h = value[i];
+              final learned = learnedToday.contains(h.id);
               return AlimCard(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
@@ -251,13 +268,24 @@ class HadithListScreen extends ConsumerWidget {
                       style: const TextStyle(height: 1.5, fontSize: 13.5),
                     ),
                     const SizedBox(height: AlimSpace.xs),
-                    Text(
-                      'No. ${h.numberInBook}',
-                      style: TextStyle(
-                        color: AlimColors.mutedOf(context),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          'No. ${h.numberInBook}',
+                          style: TextStyle(
+                            color: AlimColors.mutedOf(context),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (learned)
+                          Icon(
+                            Icons.check_circle,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -282,7 +310,8 @@ class HadithDetailScreen extends ConsumerWidget {
         ref.watch(bookmarkAtProvider(('hadith', hadith.id))).valueOrNull ??
             false;
     final learnedToday =
-        (ref.watch(todayLogProvider).valueOrNull?.hadiths ?? 0) > 0;
+        ref.watch(hadithReadSetProvider).valueOrNull?.contains(hadith.id) ??
+            false;
     final collection = ref
         .watch(hadithCollectionsProvider)
         .valueOrNull
@@ -309,8 +338,8 @@ class HadithDetailScreen extends ConsumerWidget {
             tooltip: 'Share',
             icon: const Icon(Icons.ios_share),
             onPressed: () => Share.share(
-              '${hadith.textEn}\n\n${hadith.textAr}\n— ${collection?.name ?? ''} '
-              'no. ${hadith.numberInBook}',
+              '${hadith.textEn}\n\n${hadith.textAr}\n'
+              '${collection?.name ?? ''} no. ${hadith.numberInBook}',
             ),
           ),
         ],
@@ -368,7 +397,7 @@ class HadithDetailScreen extends ConsumerWidget {
             onPressed: learnedToday
                 ? null
                 : () async {
-                    await ref.read(actionsProvider).learnedHadith();
+                    await ref.read(actionsProvider).learnedHadith(hadith.id);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(

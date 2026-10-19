@@ -5,6 +5,7 @@ import '../models.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'hadith.dart';
 import 'quran_reader.dart';
 
 class StoriesScreen extends ConsumerStatefulWidget {
@@ -33,7 +34,7 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
                       'All',
                       'Prophets',
                       'Companions',
-                      'Character',
+                      'Chosen',
                     ])
                       Padding(
                         padding: const EdgeInsets.only(right: AlimSpace.xs),
@@ -164,10 +165,27 @@ class StoryDetailScreen extends ConsumerWidget {
     final surah = ref
         .watch(surahOfAyahProvider(story.ayahNumber ?? 1))
         .valueOrNull;
+    final bookmarked =
+        ref.watch(bookmarkAtProvider(('story', story.id))).valueOrNull ??
+            false;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(story.category),
+        actions: [
+          IconButton(
+            tooltip: bookmarked ? 'Remove bookmark' : 'Bookmark',
+            icon: Icon(
+              bookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color: bookmarked ? AlimColors.gold : null,
+            ),
+            onPressed: () => ref.read(actionsProvider).toggleBookmark(
+                  'story',
+                  story.id,
+                  story.title,
+                ),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
@@ -306,6 +324,13 @@ class StoryDetailScreen extends ConsumerWidget {
               ),
             ),
           ],
+          if (story.hadithId != null) ...[
+            const SectionHeader('In the Sunnah'),
+            _HadithSourceCard(
+              hadithId: story.hadithId!,
+              reference: story.hadithRef,
+            ),
+          ],
           const SizedBox(height: AlimSpace.md),
           FilledButton.icon(
             onPressed: () async {
@@ -315,7 +340,7 @@ class StoryDetailScreen extends ConsumerWidget {
                   SnackBar(
                     content: Text(
                       read
-                          ? 'Read again — the lesson deepens.'
+                          ? 'Read again. The lesson deepens.'
                           : '+20 XP · story finished.',
                     ),
                   ),
@@ -323,7 +348,64 @@ class StoryDetailScreen extends ConsumerWidget {
               }
             },
             icon: Icon(read ? Icons.replay : Icons.check),
-            label: Text(read ? 'Read again' : 'Finished reading — +20 XP'),
+            label: Text(read ? 'Read again' : 'Finished reading · +20 XP'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The hadith that carries the story, with the collection reference the
+/// database resolved for it.
+class _HadithSourceCard extends ConsumerWidget {
+  const _HadithSourceCard({required this.hadithId, this.reference});
+
+  final int hadithId;
+  final String? reference;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hadith = ref.watch(hadithByIdProvider(hadithId)).valueOrNull;
+    if (hadith == null) return const SizedBox.shrink();
+    return AlimCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (reference != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AlimPill(
+                label: reference!,
+                color: AlimColors.gold,
+                icon: Icons.verified_outlined,
+              ),
+            ),
+          const SizedBox(height: AlimSpace.sm),
+          Text(
+            hadith.textEn,
+            style: const TextStyle(height: 1.65, fontSize: 14),
+          ),
+          const SizedBox(height: AlimSpace.sm),
+          Text(
+            hadith.textAr,
+            textAlign: TextAlign.right,
+            textDirection: TextDirection.rtl,
+            style: const TextStyle(
+              fontFamily: arabicFamily,
+              fontSize: 20,
+              height: 2,
+            ),
+          ),
+          const SizedBox(height: AlimSpace.xs),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => HadithDetailScreen(hadith: hadith),
+              ),
+            ),
+            icon: const Icon(Icons.auto_stories_outlined, size: 18),
+            label: const Text('Open the hadith'),
           ),
         ],
       ),

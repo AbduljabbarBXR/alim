@@ -19,23 +19,92 @@ class AlimStore {
 
   static const _contentAsset = 'assets/db/alim.db.gz';
 
+  /// Bumped whenever the shipped content changes. An install older than this
+  /// gets its content replaced while its own record is copied across.
+  static const contentVersion = 2;
+
+  static const _userTables = [
+    'user_kv',
+    'bookmark',
+    'daily',
+    'todo',
+    'gratitude',
+  ];
+
   static Future<AlimStore> open({String? overridePath}) async {
     final dir = overridePath ?? await getDatabasesPath();
     final file = File(p.join(dir, 'alim.db'));
     if (!await file.exists()) {
       await file.parent.create(recursive: true);
-      final compressed = await rootBundle.load(_contentAsset);
-      final bytes = gzip.decode(
-        compressed.buffer.asUint8List(
-          compressed.offsetInBytes,
-          compressed.lengthInBytes,
-        ),
-      );
-      await file.writeAsBytes(bytes, flush: true);
+      await _extract(file);
+    } else {
+      final version = await _installedContentVersion(file);
+      if (version < contentVersion) {
+        await _replaceContent(file, dir);
+      }
     }
     final db = await openDatabase(file.path);
     await _migrate(db);
     return AlimStore._(db);
+  }
+
+  /// Unpacks the shipped, compressed content database to [file].
+  static Future<void> _extract(File file) async {
+    final compressed = await rootBundle.load(_contentAsset);
+    final bytes = gzip.decode(
+      compressed.buffer.asUint8List(
+        compressed.offsetInBytes,
+        compressed.lengthInBytes,
+      ),
+    );
+    await file.writeAsBytes(bytes, flush: true);
+  }
+
+  /// The content version of the database already on disk, or 0 when it cannot
+  /// be read, which also means it should be replaced.
+  static Future<int> _installedContentVersion(File file) async {
+    Database? db;
+    try {
+      db = await openDatabase(file.path, readOnly: true);
+      final rows = await db
+          .query('meta', where: 'key = ?', whereArgs: ['db_version'], limit: 1);
+      if (rows.isEmpty) return 0;
+      return int.tryParse(rows.single['value'] as String? ?? '') ?? 0;
+    } catch (_) {
+      return 0;
+    } finally {
+      await db?.close();
+    }
+  }
+
+  /// Brings in the new content without touching the reader's own record: the
+  /// fresh database is unpacked beside the old one, every user table is copied
+  /// over through ATTACH, and only then does it take the old file's place.
+  static Future<void> _replaceContent(File file, String dir) async {
+    final fresh = File(p.join(dir, 'alim.db.new'));
+    if (await fresh.exists()) await fresh.delete();
+    await _extract(fresh);
+    Database? db;
+    try {
+      db = await openDatabase(fresh.path);
+      await db.execute('ATTACH DATABASE ? AS old', [file.path]);
+      for (final table in _userTables) {
+        try {
+          await db.rawInsert(
+              'INSERT OR REPLACE INTO $table SELECT * FROM old.$table');
+        } catch (_) {
+          // A table added after the old build simply has nothing to copy.
+        }
+      }
+      await db.execute('DETACH DATABASE old');
+      await db.close();
+      db = null;
+      await file.delete();
+      await fresh.rename(file.path);
+    } catch (_) {
+      await db?.close();
+      if (await fresh.exists()) await fresh.delete();
+    }
   }
 
   /// User tables are created here as well as in the build so that an install
@@ -138,6 +207,33 @@ class AlimStore {
     return rows.map(Ayah.fromMap).toList();
   }
 
+  /// The global ayah number that opens each juz, in order.
+  Future<List<int>> juzStarts() async {
+    final rows = await _db.rawQuery(
+        'SELECT MIN(number) AS first FROM ayah GROUP BY juz ORDER BY juz');
+    return rows.map((r) => r['first'] as int).toList();
+  }
+
+  Future<List<Ayah>> ayatOfPage(int page) async {
+    final rows = await _db.query('ayah',
+        where: 'page = ?', whereArgs: [page], orderBy: 'number');
+    return rows.map(Ayah.fromMap).toList();
+  }
+
+  Future<int> pageCount() async {
+    final rows = await _db.rawQuery('SELECT MAX(page) AS n FROM ayah');
+    return rows.single['n'] as int;
+  }
+
+  Future<int> pageOfAyah(int ayahNumber) async {
+    final rows = await _db.query('ayah',
+        columns: ['page'],
+        where: 'number = ?',
+        whereArgs: [ayahNumber],
+        limit: 1);
+    return rows.single['page'] as int;
+  }
+
   Future<List<HadithCollection>> hadithCollections() async {
     final rows = await _db.query('hadith_collection');
     final items = rows.map(HadithCollection.fromMap).toList();
@@ -179,7 +275,7 @@ class AlimStore {
     int offset = 0,
   }) async {
     final rows = await _db.query('hadith',
-        where: 'collection = ? AND book = ?',
+        where: "collection = ? AND book = ? AND TRIM(text_en) != ''",
         whereArgs: [collection, book],
         orderBy: 'number_in_book',
         limit: limit,
@@ -193,16 +289,32 @@ class AlimStore {
     return Hadith.fromMap(rows.single);
   }
 
+  Future<List<Hadith>> searchHadith(String query, {int limit = 5}) async {
+    final q = query.trim();
+    if (q.isEmpty) return const [];
+    final rows = await _db.query(
+      'hadith',
+      where: "(en_search LIKE ? OR ar_search LIKE ?) AND TRIM(text_en) != ''",
+      whereArgs: ['%${q.toLowerCase()}%', '%${normalizeArabic(q)}%'],
+      orderBy: 'short DESC, id',
+      limit: limit,
+    );
+    return rows.map(Hadith.fromMap).toList();
+  }
+
   Future<int> shortHadithCount() async {
-    final rows =
-        await _db.rawQuery('SELECT COUNT(*) AS n FROM hadith WHERE short = 1');
+    final rows = await _db.rawQuery(
+        "SELECT COUNT(*) AS n FROM hadith WHERE short = 1 AND TRIM(text_en) != ''");
     return rows.single['n'] as int;
   }
 
   /// The nth short hadith, in a stable order, for "hadith of the day".
   Future<Hadith> shortHadithAt(int index) async {
     final rows = await _db.query('hadith',
-        where: 'short = 1', orderBy: 'id', limit: 1, offset: index);
+        where: "short = 1 AND TRIM(text_en) != ''",
+        orderBy: 'id',
+        limit: 1,
+        offset: index);
     return Hadith.fromMap(rows.single);
   }
 

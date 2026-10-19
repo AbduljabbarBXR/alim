@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:alim/data/store.dart';
+import 'package:alim/screens/mushaf.dart';
 import 'package:alim/screens/onboarding.dart';
 import 'package:alim/screens/quran_reader.dart';
 import 'package:alim/screens/shell.dart';
+import 'package:alim/screens/stories.dart';
 import 'package:alim/state.dart';
 import 'package:alim/theme.dart';
 import 'package:flutter/material.dart';
@@ -106,12 +108,39 @@ void main() {
 
     await tester.tap(find.text('Al-Faatiha 1:1'));
     await settle(tester);
-    expect(find.textContaining('counted today'), findsOneWidget);
+    expect(find.text('Read today'), findsOneWidget);
+    expect(find.text('Mark as last read'), findsOneWidget);
 
     final read = await store.kvGet('read_set_${AlimStore.todayKey(monday)}');
     expect(read, isNotNull);
     expect(read!.split(','), contains('1'));
+    expect(await store.lastRead(), isNull);
+
+    await tester.tap(find.text('Mark as last read'));
+    await settle(tester);
     expect(await store.lastRead(), 1);
+  });
+
+  testWidgets('the mushaf opens on the page of the day', (tester) async {
+    await tester.pumpWidget(wrap(const MushafScreen(initialAyah: 1)));
+    await settle(tester);
+
+    expect(find.text('Juz 1'), findsOneWidget);
+    expect(find.text('Al-Faatiha'), findsOneWidget);
+    expect(find.text('Page 1'), findsOneWidget);
+  });
+
+  testWidgets('a story shows where it sits in the sunnah', (tester) async {
+    final stories = await store.stories();
+    final sourced = stories.firstWhere((s) => s.hadithId != null);
+    await tester.pumpWidget(wrap(StoryDetailScreen(story: sourced)));
+    await settle(tester);
+    await scrollTo(tester, 'In the Sunnah', maxDrags: 20);
+
+    final unsourced = stories.firstWhere((s) => s.hadithId == null);
+    await tester.pumpWidget(wrap(StoryDetailScreen(story: unsourced)));
+    await settle(tester);
+    expect(find.text('In the Sunnah'), findsNothing);
   });
 
   testWidgets('onboarding walks name, goal and reminder into a saved profile',

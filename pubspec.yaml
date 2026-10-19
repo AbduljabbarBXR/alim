@@ -2,7 +2,7 @@ name: alim
 description: "Alim — your deen and your day, together. Qur'an, sahih hadith, stories, daily worship and work in one place."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.7.2
@@ -30,6 +30,14 @@ dependencies:
 
   # Sharing verses
   share_plus: ^10.1.4
+
+  # Place and prayer
+  geolocator: ^14.0.2
+  flutter_compass: ^0.8.1
+  adhan_dart: ^2.0.1
+
+  # Landing exactly on a chosen ayah inside a long lazy list
+  scrollable_positioned_list: ^0.3.8
 
   # Hijri calendar
   hijri: ^3.0.0

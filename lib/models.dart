@@ -144,6 +144,8 @@ class Story {
     required this.lesson,
     required this.ayahRef,
     required this.ayahNumber,
+    required this.hadithId,
+    required this.hadithRef,
   });
 
   final int id;
@@ -157,6 +159,12 @@ class Story {
   /// The global ayah number the story points at, when it points at one.
   final int? ayahNumber;
 
+  /// The hadith row that carries the story in the Sunnah, when one matched.
+  final int? hadithId;
+
+  /// A readable reference for that hadith, e.g. "Sahih al-Bukhari 3364".
+  final String? hadithRef;
+
   List<String> get paragraphs =>
       body.split('\n\n').where((p) => p.trim().isNotEmpty).toList();
 
@@ -169,6 +177,8 @@ class Story {
         lesson: m['lesson'] as String,
         ayahRef: m['ayah_ref'] as String?,
         ayahNumber: m['ayah_number'] as int?,
+        hadithId: m['hadith_id'] as int?,
+        hadithRef: m['hadith_ref'] as String?,
       );
 }
 
@@ -294,6 +304,8 @@ class Profile {
     this.reminderHour = 20,
     this.reminderMinute = 0,
     this.reminderOn = false,
+    this.prayerMethod = 'muslimWorldLeague',
+    this.asrHanafi = false,
   });
 
   final String name;
@@ -304,6 +316,8 @@ class Profile {
   final int reminderHour;
   final int reminderMinute;
   final bool reminderOn;
+  final String prayerMethod;
+  final bool asrHanafi;
 
   Profile copyWith({
     String? name,
@@ -314,6 +328,8 @@ class Profile {
     int? reminderHour,
     int? reminderMinute,
     bool? reminderOn,
+    String? prayerMethod,
+    bool? asrHanafi,
   }) =>
       Profile(
         name: name ?? this.name,
@@ -324,5 +340,7 @@ class Profile {
         reminderHour: reminderHour ?? this.reminderHour,
         reminderMinute: reminderMinute ?? this.reminderMinute,
         reminderOn: reminderOn ?? this.reminderOn,
+        prayerMethod: prayerMethod ?? this.prayerMethod,
+        asrHanafi: asrHanafi ?? this.asrHanafi,
       );
 }
