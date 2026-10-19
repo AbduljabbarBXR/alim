@@ -5,6 +5,45 @@ import 'package:flutter/material.dart';
 /// Alim's palette: deep emerald and warm gold on parchment, with a midnight
 /// mode for night reading. Every text colour is chosen to clear 4.5:1 on the
 /// surface it sits on.
+/// A calm slide between pages, written here so the same motion works on
+/// every Flutter version and no bare frame flashes between screens.
+class AlimPageTransitions extends PageTransitionsBuilder {
+  const AlimPageTransitions();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final entering = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    final leaving = CurvedAnimation(
+      parent: secondaryAnimation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(1, 0),
+        end: Offset.zero,
+      ).animate(entering),
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset.zero,
+          end: const Offset(-0.22, 0),
+        ).animate(leaving),
+        child: child,
+      ),
+    );
+  }
+}
+
 class AlimColors {
   const AlimColors._();
 
@@ -94,8 +133,8 @@ ThemeData buildAlimTheme(Brightness brightness) {
     fontFamily: 'Roboto',
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
-        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.android: AlimPageTransitions(),
+        TargetPlatform.iOS: AlimPageTransitions(),
       },
     ),
   );
