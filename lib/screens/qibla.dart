@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../services/location.dart';
 import '../services/prayer.dart';
@@ -10,19 +11,76 @@ import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 
-/// Asks for a fix, and says so when nothing answers.
+/// Asks for a fix, and says exactly what is missing when nothing answers.
 Future<void> acquireLocation(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
-  final place = await ref.read(actionsProvider).locate();
-  if (place == null) {
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          'No location yet. Allow location access and try again.',
-        ),
-      ),
-    );
+  try {
+    await ref.read(actionsProvider).locate();
+  } on LocationProblemException catch (problem) {
+    if (!context.mounted) return;
+    switch (problem.problem) {
+      case LocationProblem.serviceOff:
+        final open = await _offerSettings(
+          context,
+          title: 'Location is turned off',
+          body: 'Alim needs this phone\'s location for prayer times and the '
+              'qibla. Turn it on, then come back.',
+        );
+        if (open) await Geolocator.openLocationSettings();
+      case LocationProblem.blocked:
+        final open = await _offerSettings(
+          context,
+          title: 'Location is blocked',
+          body: 'Location was blocked for Alim. Allow it in the app settings, '
+              'then come back.',
+        );
+        if (open) await Geolocator.openAppSettings();
+      case LocationProblem.denied:
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Location was not allowed. Alim needs it for prayer times and '
+              'the qibla.',
+            ),
+          ),
+        );
+      case LocationProblem.unavailable:
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('No fix yet. Step outside or try again.'),
+            action: SnackBarAction(
+              label: 'Try again',
+              onPressed: () => acquireLocation(context, ref),
+            ),
+          ),
+        );
+    }
   }
+}
+
+Future<bool> _offerSettings(
+  BuildContext context, {
+  required String title,
+  required String body,
+}) async {
+  final answer = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(body),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Open settings'),
+        ),
+      ],
+    ),
+  );
+  return answer ?? false;
 }
 
 class QiblaScreen extends ConsumerWidget {

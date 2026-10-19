@@ -444,11 +444,10 @@ class AlimActions {
     _bump();
   }
 
-  /// Reads a fresh fix and remembers it. Null means the person said no, the
-  /// location service is off, or the sky did not answer in time.
-  Future<AlimLocation?> locate() async {
+  /// Reads a fresh fix and remembers it. Throws [LocationProblemException]
+  /// when the service is off, the permission is refused, or no fix arrives.
+  Future<AlimLocation> locate() async {
     final place = await LocationService.current();
-    if (place == null) return null;
     await _store.kvSet('location', '${place.latitude},${place.longitude}');
     _bump();
     return place;
