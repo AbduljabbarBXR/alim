@@ -54,16 +54,22 @@ Future<void> _pickTranslation(
                   ),
                 ),
                 for (final t in items)
-                  RadioListTile<String>(
-                    value: t.slug,
-                    groupValue: profile.translation,
+                  ListTile(
+                    leading: Icon(
+                      t.slug == profile.translation
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      color:
+                          t.slug == profile.translation
+                              ? AlimColors.gold
+                              : AlimColors.mutedOf(sheetContext),
+                    ),
                     title: Text(t.title),
                     subtitle: Text('${t.translator}, ${t.year}'),
-                    onChanged: (value) async {
-                      if (value == null) return;
+                    onTap: () async {
                       await ref
                           .read(actionsProvider)
-                          .saveProfile(profile.copyWith(translation: value));
+                          .saveProfile(profile.copyWith(translation: t.slug));
                       if (sheetContext.mounted) {
                         Navigator.of(sheetContext).pop();
                       }
