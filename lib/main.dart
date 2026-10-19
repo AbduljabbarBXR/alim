@@ -9,6 +9,7 @@ import 'screens/shell.dart';
 import 'services/notifications.dart';
 import 'state.dart';
 import 'theme.dart';
+import 'widgets/backdrop.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,6 +61,7 @@ class _BootRootState extends State<BootRoot> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: buildAlimTheme(Brightness.light),
+            builder: alimBackdropBuilder,
             home: Scaffold(
               body: Center(
                 child: Padding(
@@ -82,6 +84,7 @@ class _BootRootState extends State<BootRoot> {
             theme: buildAlimTheme(Brightness.light),
             darkTheme: buildAlimTheme(Brightness.dark),
             themeMode: ThemeMode.system,
+            builder: alimBackdropBuilder,
             home: const BootSplash(),
           );
         }
@@ -127,9 +130,9 @@ class BootSplash extends StatelessWidget {
               Text(
                 'Alim',
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                    ),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                ),
               ),
               const SizedBox(height: AlimSpace.xs),
               const Text(
@@ -169,6 +172,7 @@ class AlimApp extends ConsumerWidget {
       theme: buildAlimTheme(Brightness.light),
       darkTheme: buildAlimTheme(Brightness.dark),
       themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+      builder: alimBackdropBuilder,
       home: onboarded ? const ShellScreen() : const OnboardingScreen(),
     );
   }

@@ -22,25 +22,67 @@ class AlimCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final radius = BorderRadius.circular(AlimRadius.card);
+    final fill =
+        color ?? (dark ? const Color(0xCC15211D) : const Color(0xE6FFFDF8));
+    final rim = border ?? AlimColors.gold.withValues(alpha: dark ? 0.30 : 0.36);
     final content = Padding(padding: padding, child: child);
-    final decorated = DecoratedBox(
-      decoration: BoxDecoration(
-        color: color ?? AlimColors.card(context),
-        borderRadius: BorderRadius.circular(AlimRadius.card),
-        border: Border.all(color: border ?? AlimColors.hairlineOf(context)),
-      ),
-      child: onTap == null
-          ? content
-          : Material(
+    final surface = DecoratedBox(
+      decoration: BoxDecoration(color: fill, borderRadius: radius),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: dark ? 0.045 : 0.18),
+                      Colors.transparent,
+                    ],
+                    stops: const [0, 0.55],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (onTap == null)
+            content
+          else
+            Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(AlimRadius.card),
+                borderRadius: radius,
                 onTap: onTap,
                 child: content,
               ),
             ),
+        ],
+      ),
     );
-    return decorated;
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: (dark ? Colors.black : AlimColors.leafDeep).withValues(
+              alpha: dark ? 0.22 : 0.045,
+            ),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      foregroundDecoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: rim, width: 1.1),
+      ),
+      child: ClipRRect(borderRadius: radius, child: surface),
+    );
   }
 }
 
@@ -53,19 +95,34 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(
-        top: AlimSpace.lg,
-        bottom: AlimSpace.xs,
-      ),
+      padding: const EdgeInsets.only(top: AlimSpace.lg, bottom: AlimSpace.xs),
       child: Row(
         children: [
+          Container(
+            width: 3,
+            height: 18,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(2),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AlimColors.gold,
+                  AlimColors.gold.withValues(alpha: 0.25),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 9),
           Expanded(
             child: Text(
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                  ),
+                fontFamily: arabicFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 16.5,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
           if (trailing != null) trailing!,
@@ -220,9 +277,9 @@ class StatTile extends StatelessWidget {
         children: [
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 2),
           Text(
@@ -253,7 +310,11 @@ class StatTile extends StatelessWidget {
 }
 
 class EmptyNote extends StatelessWidget {
-  const EmptyNote({super.key, required this.text, this.icon = Icons.nights_stay_outlined});
+  const EmptyNote({
+    super.key,
+    required this.text,
+    this.icon = Icons.nights_stay_outlined,
+  });
 
   final String text;
   final IconData icon;
@@ -269,10 +330,7 @@ class EmptyNote extends StatelessWidget {
           Text(
             text,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AlimColors.mutedOf(context),
-              height: 1.5,
-            ),
+            style: TextStyle(color: AlimColors.mutedOf(context), height: 1.5),
           ),
         ],
       ),
@@ -282,12 +340,7 @@ class EmptyNote extends StatelessWidget {
 
 /// A pill showing small facts, used for revelation place, ayah counts, ranks.
 class AlimPill extends StatelessWidget {
-  const AlimPill({
-    super.key,
-    required this.label,
-    this.color,
-    this.icon,
-  });
+  const AlimPill({super.key, required this.label, this.color, this.icon});
 
   final String label;
   final Color? color;

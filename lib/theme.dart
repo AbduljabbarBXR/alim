@@ -38,7 +38,9 @@ class AlimColors {
   static Color mutedOf(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark ? nightMuted : muted;
   static Color hairlineOf(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? nightHairline : hairline;
+      Theme.of(context).brightness == Brightness.dark
+          ? nightHairline
+          : hairline;
 }
 
 class AlimSpace {
@@ -88,61 +90,137 @@ ThemeData buildAlimTheme(Brightness brightness) {
   final base = ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor:
-        dark ? AlimColors.night : AlimColors.parchment,
+    scaffoldBackgroundColor: Colors.transparent,
     fontFamily: 'Roboto',
   );
 
+  final muted = dark ? AlimColors.nightMuted : AlimColors.muted;
+  final line = AlimColors.gold.withValues(alpha: dark ? 0.24 : 0.30);
+  final softLine = AlimColors.gold.withValues(alpha: dark ? 0.14 : 0.18);
+  final glass = dark ? const Color(0xC615211D) : const Color(0xDBFFFDF8);
+
+  TextStyle heading(TextStyle? style) => (style ?? const TextStyle()).copyWith(
+    fontFamily: arabicFamily,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.25,
+  );
+
   return base.copyWith(
+    textTheme: base.textTheme.copyWith(
+      displayLarge: heading(base.textTheme.displayLarge),
+      displayMedium: heading(base.textTheme.displayMedium),
+      displaySmall: heading(base.textTheme.displaySmall),
+      headlineLarge: heading(base.textTheme.headlineLarge),
+      headlineMedium: heading(base.textTheme.headlineMedium),
+      headlineSmall: heading(base.textTheme.headlineSmall),
+      titleLarge: heading(base.textTheme.titleLarge),
+      titleMedium: heading(base.textTheme.titleMedium),
+    ),
     appBarTheme: AppBarTheme(
-      backgroundColor: dark ? AlimColors.night : AlimColors.parchment,
+      backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: false,
       foregroundColor: scheme.onSurface,
-      titleTextStyle: base.textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: scheme.onSurface,
+      shape: Border(bottom: BorderSide(color: softLine, width: 1)),
+      titleTextStyle: heading(
+        base.textTheme.titleLarge,
+      ).copyWith(fontSize: 22, color: scheme.onSurface),
+      iconTheme: IconThemeData(
+        color: dark ? AlimColors.goldSoft : AlimColors.leafDeep,
       ),
     ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      height: 72,
+      indicatorColor: AlimColors.gold.withValues(alpha: dark ? 0.20 : 0.16),
+      indicatorShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: AlimColors.gold.withValues(alpha: dark ? 0.30 : 0.35),
+        ),
+      ),
+      iconTheme: WidgetStateProperty.resolveWith((states) {
+        final selected = states.contains(WidgetState.selected);
+        return IconThemeData(
+          size: 23,
+          color:
+              selected
+                  ? (dark ? AlimColors.goldSoft : AlimColors.leafDeep)
+                  : muted,
+        );
+      }),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) {
+        final selected = states.contains(WidgetState.selected);
+        return TextStyle(
+          fontFamily: arabicFamily,
+          fontSize: 12.5,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          color:
+              selected
+                  ? (dark ? AlimColors.goldSoft : AlimColors.leafDeep)
+                  : muted,
+        );
+      }),
+    ),
     cardTheme: CardThemeData(
-      color: dark ? AlimColors.nightSurface : AlimColors.surface,
+      color: glass,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AlimRadius.card),
-        side: BorderSide(color: (dark ? AlimColors.nightHairline : AlimColors.hairline)),
+        side: BorderSide(color: line),
       ),
       margin: EdgeInsets.zero,
     ),
-    dividerTheme: DividerThemeData(
-      color: (dark ? AlimColors.nightHairline : AlimColors.hairline),
-      thickness: 1,
+    dialogTheme: DialogThemeData(
+      backgroundColor: dark ? const Color(0xF215211D) : const Color(0xF7FFFDF8),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: line),
+      ),
+      titleTextStyle: heading(
+        base.textTheme.titleLarge,
+      ).copyWith(color: scheme.onSurface, fontSize: 20),
     ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: dark ? const Color(0xF215211D) : const Color(0xF7FFFDF8),
+      modalBackgroundColor:
+          dark ? const Color(0xF215211D) : const Color(0xF7FFFDF8),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        side: BorderSide(color: line),
+      ),
+    ),
+    dividerTheme: DividerThemeData(color: softLine, thickness: 1),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: dark ? AlimColors.night : AlimColors.surface,
+      fillColor: dark ? const Color(0xB315211D) : const Color(0xCCFFFDF8),
+      hintStyle: TextStyle(color: muted),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AlimRadius.field),
-        borderSide: BorderSide(color: (dark ? AlimColors.nightHairline : AlimColors.hairline)),
+        borderSide: BorderSide(color: line),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AlimRadius.field),
-        borderSide: BorderSide(color: (dark ? AlimColors.nightHairline : AlimColors.hairline)),
+        borderSide: BorderSide(color: line),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AlimRadius.field),
-        borderSide: BorderSide(
-          color: dark ? const Color(0xFF6FC3A4) : AlimColors.leaf,
-          width: 1.6,
-        ),
+        borderSide: BorderSide(color: scheme.primary, width: 1.6),
       ),
-      labelStyle: TextStyle(
-        color: (dark ? AlimColors.nightMuted : AlimColors.muted),
-      ),
+      labelStyle: TextStyle(color: muted),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(0, 52),
+        side: BorderSide(
+          color: AlimColors.gold.withValues(alpha: dark ? 0.45 : 0.55),
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AlimRadius.field),
         ),
@@ -152,7 +230,7 @@ ThemeData buildAlimTheme(Brightness brightness) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, 52),
-        side: BorderSide(color: (dark ? AlimColors.nightHairline : AlimColors.hairline)),
+        side: BorderSide(color: line),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AlimRadius.field),
         ),
@@ -161,26 +239,30 @@ ThemeData buildAlimTheme(Brightness brightness) {
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: dark ? AlimColors.nightSurface : AlimColors.ink,
+      backgroundColor: dark ? const Color(0xF215211D) : AlimColors.ink,
       contentTextStyle: TextStyle(
         color: dark ? AlimColors.nightInk : Colors.white,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AlimRadius.field),
+        side: BorderSide(color: softLine),
       ),
     ),
     tabBarTheme: TabBarThemeData(
       labelColor: scheme.primary,
-      unselectedLabelColor: (dark ? AlimColors.nightMuted : AlimColors.muted),
-      indicatorColor: scheme.primary,
+      unselectedLabelColor: muted,
+      indicatorColor: AlimColors.gold,
     ),
     listTileTheme: ListTileThemeData(
-      iconColor: (dark ? AlimColors.nightMuted : AlimColors.muted),
+      iconColor: dark ? AlimColors.goldSoft : AlimColors.leafDeep,
       textColor: scheme.onSurface,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: AlimColors.gold,
+      linearTrackColor: softLine,
     ),
   );
 }
-
 
 /// A quiet eight-point star lattice drawn behind headers, the way the tilework
 /// of a courtyard wall sits behind everything without ever being the subject.
@@ -211,10 +293,11 @@ class _LatticePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4;
     const step = 64.0;
     const r = 30.0;
     const r2 = 15.0;
