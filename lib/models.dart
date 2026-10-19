@@ -26,14 +26,14 @@ class Surah {
   int get lastAyah => firstAyah + ayat - 1;
 
   factory Surah.fromMap(Map<String, Object?> m) => Surah(
-        number: m['number'] as int,
-        name: m['name'] as String,
-        meaning: m['meaning'] as String,
-        nameAr: m['name_ar'] as String,
-        revelation: m['revelation'] as String,
-        ayat: m['ayat'] as int,
-        firstAyah: m['first_ayah'] as int,
-      );
+    number: m['number'] as int,
+    name: m['name'] as String,
+    meaning: m['meaning'] as String,
+    nameAr: m['name_ar'] as String,
+    revelation: m['revelation'] as String,
+    ayat: m['ayat'] as int,
+    firstAyah: m['first_ayah'] as int,
+  );
 }
 
 class Ayah {
@@ -58,15 +58,42 @@ class Ayah {
   final String textEn;
 
   factory Ayah.fromMap(Map<String, Object?> m) => Ayah(
-        number: m['number'] as int,
-        surah: m['surah'] as int,
-        ayah: m['ayah'] as int,
-        juz: m['juz'] as int,
-        page: m['page'] as int,
-        sajda: (m['sajda'] as int? ?? 0) == 1,
-        textAr: m['text_ar'] as String,
-        textEn: m['text_en'] as String,
-      );
+    number: m['number'] as int,
+    surah: m['surah'] as int,
+    ayah: m['ayah'] as int,
+    juz: m['juz'] as int,
+    page: m['page'] as int,
+    sajda: (m['sajda'] as int? ?? 0) == 1,
+    textAr: m['text_ar'] as String,
+    textEn: m['text_en'] as String,
+  );
+}
+
+class Translation {
+  const Translation({
+    required this.id,
+    required this.slug,
+    required this.title,
+    required this.translator,
+    required this.year,
+    required this.source,
+  });
+
+  final int id;
+  final String slug;
+  final String title;
+  final String translator;
+  final String year;
+  final String source;
+
+  factory Translation.fromMap(Map<String, Object?> m) => Translation(
+    id: m['id'] as int,
+    slug: m['slug'] as String,
+    title: m['title'] as String,
+    translator: m['translator'] as String,
+    year: m['year'] as String,
+    source: m['source'] as String,
+  );
 }
 
 class HadithCollection {
@@ -85,12 +112,12 @@ class HadithCollection {
   final int count;
 
   factory HadithCollection.fromMap(Map<String, Object?> m) => HadithCollection(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        arabicName: m['arabic_name'] as String,
-        blurb: m['blurb'] as String,
-        count: m['count'] as int,
-      );
+    id: m['id'] as String,
+    name: m['name'] as String,
+    arabicName: m['arabic_name'] as String,
+    blurb: m['blurb'] as String,
+    count: m['count'] as int,
+  );
 }
 
 class HadithBook {
@@ -125,13 +152,13 @@ class Hadith {
   final String textAr;
 
   factory Hadith.fromMap(Map<String, Object?> m) => Hadith(
-        id: m['id'] as int,
-        collection: m['collection'] as String,
-        book: m['book'] as int,
-        numberInBook: m['number_in_book'] as int,
-        textEn: m['text_en'] as String,
-        textAr: m['text_ar'] as String,
-      );
+    id: m['id'] as int,
+    collection: m['collection'] as String,
+    book: m['book'] as int,
+    numberInBook: m['number_in_book'] as int,
+    textEn: m['text_en'] as String,
+    textAr: m['text_ar'] as String,
+  );
 }
 
 class Story {
@@ -169,17 +196,17 @@ class Story {
       body.split('\n\n').where((p) => p.trim().isNotEmpty).toList();
 
   factory Story.fromMap(Map<String, Object?> m) => Story(
-        id: m['id'] as int,
-        category: m['category'] as String,
-        title: m['title'] as String,
-        minutes: m['minutes'] as int,
-        body: m['body'] as String,
-        lesson: m['lesson'] as String,
-        ayahRef: m['ayah_ref'] as String?,
-        ayahNumber: m['ayah_number'] as int?,
-        hadithId: m['hadith_id'] as int?,
-        hadithRef: m['hadith_ref'] as String?,
-      );
+    id: m['id'] as int,
+    category: m['category'] as String,
+    title: m['title'] as String,
+    minutes: m['minutes'] as int,
+    body: m['body'] as String,
+    lesson: m['lesson'] as String,
+    ayahRef: m['ayah_ref'] as String?,
+    ayahNumber: m['ayah_number'] as int?,
+    hadithId: m['hadith_id'] as int?,
+    hadithRef: m['hadith_ref'] as String?,
+  );
 }
 
 class Bookmark {
@@ -198,12 +225,12 @@ class Bookmark {
   final String created;
 
   factory Bookmark.fromMap(Map<String, Object?> m) => Bookmark(
-        id: m['id'] as int,
-        kind: m['kind'] as String,
-        ref: m['ref'] as int,
-        label: m['label'] as String,
-        created: m['created'] as String,
-      );
+    id: m['id'] as int,
+    kind: m['kind'] as String,
+    ref: m['ref'] as int,
+    label: m['label'] as String,
+    created: m['created'] as String,
+  );
 }
 
 class Todo {
@@ -220,11 +247,11 @@ class Todo {
   final bool done;
 
   factory Todo.fromMap(Map<String, Object?> m) => Todo(
-        id: m['id'] as int,
-        title: m['title'] as String,
-        due: m['due'] as String?,
-        done: (m['done'] as int? ?? 0) == 1,
-      );
+    id: m['id'] as int,
+    title: m['title'] as String,
+    due: m['due'] as String?,
+    done: (m['done'] as int? ?? 0) == 1,
+  );
 }
 
 class DayLog {
@@ -256,13 +283,14 @@ class DayLog {
         stories: m['stories'] as int? ?? 0,
         dhikr: m['dhikr'] as int? ?? 0,
         xp: m['xp'] as int? ?? 0,
-        tasks: ((m['tasks'] as String?) ?? '{}')
-            .replaceAll('{', '')
-            .replaceAll('}', '')
-            .replaceAll('"', '')
-            .split(',')
-            .where((s) => s.trim().isNotEmpty)
-            .toSet(),
+        tasks:
+            ((m['tasks'] as String?) ?? '{}')
+                .replaceAll('{', '')
+                .replaceAll('}', '')
+                .replaceAll('"', '')
+                .split(',')
+                .where((s) => s.trim().isNotEmpty)
+                .toSet(),
         gratitude: gratitude,
       );
 }
@@ -299,6 +327,7 @@ class Profile {
     this.name = '',
     this.versesGoal = 5,
     this.translationOn = true,
+    this.translation = 'sahih',
     this.arabicScale = 1.0,
     this.darkMode = false,
     this.reminderHour = 20,
@@ -311,6 +340,7 @@ class Profile {
   final String name;
   final int versesGoal;
   final bool translationOn;
+  final String translation;
   final double arabicScale;
   final bool darkMode;
   final int reminderHour;
@@ -323,6 +353,7 @@ class Profile {
     String? name,
     int? versesGoal,
     bool? translationOn,
+    String? translation,
     double? arabicScale,
     bool? darkMode,
     int? reminderHour,
@@ -330,17 +361,17 @@ class Profile {
     bool? reminderOn,
     String? prayerMethod,
     bool? asrHanafi,
-  }) =>
-      Profile(
-        name: name ?? this.name,
-        versesGoal: versesGoal ?? this.versesGoal,
-        translationOn: translationOn ?? this.translationOn,
-        arabicScale: arabicScale ?? this.arabicScale,
-        darkMode: darkMode ?? this.darkMode,
-        reminderHour: reminderHour ?? this.reminderHour,
-        reminderMinute: reminderMinute ?? this.reminderMinute,
-        reminderOn: reminderOn ?? this.reminderOn,
-        prayerMethod: prayerMethod ?? this.prayerMethod,
-        asrHanafi: asrHanafi ?? this.asrHanafi,
-      );
+  }) => Profile(
+    name: name ?? this.name,
+    versesGoal: versesGoal ?? this.versesGoal,
+    translationOn: translationOn ?? this.translationOn,
+    translation: translation ?? this.translation,
+    arabicScale: arabicScale ?? this.arabicScale,
+    darkMode: darkMode ?? this.darkMode,
+    reminderHour: reminderHour ?? this.reminderHour,
+    reminderMinute: reminderMinute ?? this.reminderMinute,
+    reminderOn: reminderOn ?? this.reminderOn,
+    prayerMethod: prayerMethod ?? this.prayerMethod,
+    asrHanafi: asrHanafi ?? this.asrHanafi,
+  );
 }

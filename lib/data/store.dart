@@ -17,11 +17,13 @@ class AlimStore {
 
   final Database _db;
 
+  final Set<String> _translationSlugs = {};
+
   static const _contentAsset = 'assets/db/alim.db.gz';
 
   /// Bumped whenever the shipped content changes. An install older than this
   /// gets its content replaced while its own record is copied across.
-  static const contentVersion = 3;
+  static const contentVersion = 4;
 
   static const _userTables = [
     'user_kv',
@@ -45,7 +47,46 @@ class AlimStore {
     }
     final db = await openDatabase(file.path);
     await _migrate(db);
-    return AlimStore._(db);
+    final store = AlimStore._(db);
+    await store._loadTranslations();
+    return store;
+  }
+
+  /// The slugs that actually exist in the shipped content, so a preference
+  /// from another build can never blank the reader out.
+  Future<void> _loadTranslations() async {
+    try {
+      final rows = await _db.query('translation', columns: ['slug']);
+      _translationSlugs
+        ..clear()
+        ..addAll(rows.map((r) => r['slug'] as String));
+    } catch (_) {
+      _translationSlugs.clear();
+    }
+  }
+
+  String _effectiveTranslation(String slug) =>
+      _translationSlugs.contains(slug) ? slug : 'sahih';
+
+  /// Every ayah read for display joins the chosen translation, so one query
+  /// shape serves the reader, search, the mushaf page and the verse of the
+  /// day alike.
+  Future<List<Map<String, Object?>>> _ayahRows({
+    required String translation,
+    String? where,
+    List<Object?>? whereArgs,
+    String? orderBy,
+    int? limit,
+  }) {
+    return _db.rawQuery(
+      'SELECT a.*, t.text AS text_en FROM ayah a '
+      'JOIN ayah_translation t ON t.ayah = a.number AND t.translation = '
+      '(SELECT id FROM translation WHERE slug = ?) '
+      '${where == null ? '' : 'WHERE $where '}'
+      '${orderBy == null ? '' : 'ORDER BY $orderBy '}'
+      '${limit == null ? '' : 'LIMIT $limit'}',
+      [_effectiveTranslation(translation), ...?whereArgs],
+    );
   }
 
   /// Unpacks the shipped, compressed content database to [file].
@@ -66,8 +107,12 @@ class AlimStore {
     Database? db;
     try {
       db = await openDatabase(file.path, readOnly: true);
-      final rows = await db
-          .query('meta', where: 'key = ?', whereArgs: ['db_version'], limit: 1);
+      final rows = await db.query(
+        'meta',
+        where: 'key = ?',
+        whereArgs: ['db_version'],
+        limit: 1,
+      );
       if (rows.isEmpty) return 0;
       return int.tryParse(rows.single['value'] as String? ?? '') ?? 0;
     } catch (_) {
@@ -91,7 +136,8 @@ class AlimStore {
       for (final table in _userTables) {
         try {
           await db.rawInsert(
-              'INSERT OR REPLACE INTO $table SELECT * FROM old.$table');
+            'INSERT OR REPLACE INTO $table SELECT * FROM old.$table',
+          );
         } catch (_) {
           // A table added after the old build simply has nothing to copy.
         }
@@ -123,7 +169,8 @@ class AlimStore {
       )
     ''');
     await db.execute(
-        'CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmark ON bookmark(kind, ref)');
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmark ON bookmark(kind, ref)',
+    );
     await db.execute('''
       CREATE TABLE IF NOT EXISTS daily (
         date TEXT PRIMARY KEY,
@@ -161,48 +208,80 @@ class AlimStore {
   }
 
   Future<Surah> surah(int number) async {
-    final rows = await _db.query('surah',
-        where: 'number = ?', whereArgs: [number], limit: 1);
+    final rows = await _db.query(
+      'surah',
+      where: 'number = ?',
+      whereArgs: [number],
+      limit: 1,
+    );
     return Surah.fromMap(rows.single);
   }
 
-  Future<List<Ayah>> ayatOf(int surah) async {
-    final rows = await _db.query('ayah',
-        where: 'surah = ?', whereArgs: [surah], orderBy: 'ayah');
+  Future<List<Translation>> translations() async {
+    final rows = await _db.query('translation', orderBy: 'id');
+    return rows.map(Translation.fromMap).toList();
+  }
+
+  Future<List<Ayah>> ayatOf(int surah, {String translation = 'sahih'}) async {
+    final rows = await _ayahRows(
+      translation: translation,
+      where: 'a.surah = ?',
+      whereArgs: [surah],
+      orderBy: 'a.ayah',
+    );
     return rows.map(Ayah.fromMap).toList();
   }
 
-  Future<Ayah> ayah(int number) async {
-    final rows = await _db
-        .query('ayah', where: 'number = ?', whereArgs: [number], limit: 1);
+  Future<Ayah> ayah(int number, {String translation = 'sahih'}) async {
+    final rows = await _ayahRows(
+      translation: translation,
+      where: 'a.number = ?',
+      whereArgs: [number],
+      limit: 1,
+    );
     return Ayah.fromMap(rows.single);
   }
 
-  Future<Ayah> ayahAt(int surah, int ayah) async {
-    final rows = await _db.query('ayah',
-        where: 'surah = ? AND ayah = ?', whereArgs: [surah, ayah], limit: 1);
+  Future<Ayah> ayahAt(
+    int surah,
+    int ayah, {
+    String translation = 'sahih',
+  }) async {
+    final rows = await _ayahRows(
+      translation: translation,
+      where: 'a.surah = ? AND a.ayah = ?',
+      whereArgs: [surah, ayah],
+      limit: 1,
+    );
     return Ayah.fromMap(rows.single);
   }
 
   Future<Surah> surahOfAyah(int ayahNumber) async {
-    final rows = await _db.query('surah',
-        where: 'first_ayah <= ? AND first_ayah + ayat > ?',
-        whereArgs: [ayahNumber, ayahNumber],
-        limit: 1);
+    final rows = await _db.query(
+      'surah',
+      where: 'first_ayah <= ? AND first_ayah + ayat > ?',
+      whereArgs: [ayahNumber, ayahNumber],
+      limit: 1,
+    );
     return Surah.fromMap(rows.single);
   }
 
-  Future<List<Ayah>> searchAyat(String query, {int limit = 40}) async {
+  Future<List<Ayah>> searchAyat(
+    String query, {
+    String translation = 'sahih',
+    int limit = 40,
+  }) async {
     final q = query.trim();
     if (q.isEmpty) return const [];
     final en = q.toLowerCase();
     final ar = normalizeArabic(q);
-    final rows = await _db.query(
-      'ayah',
-      where: 'en_search LIKE ? OR ar_search LIKE ?',
-      whereArgs: ['%$en%', '%$ar%'],
-      orderBy: 'number',
-      limit: limit,
+    final rows = await _db.rawQuery(
+      'SELECT a.*, t.text AS text_en FROM ayah a '
+      'JOIN ayah_translation t ON t.ayah = a.number AND t.translation = '
+      '(SELECT id FROM translation WHERE slug = ?) '
+      'WHERE t.search LIKE ? OR a.ar_search LIKE ? '
+      'ORDER BY a.number LIMIT ?',
+      [_effectiveTranslation(translation), '%$en%', '%$ar%', limit],
     );
     return rows.map(Ayah.fromMap).toList();
   }
@@ -210,13 +289,21 @@ class AlimStore {
   /// The global ayah number that opens each juz, in order.
   Future<List<int>> juzStarts() async {
     final rows = await _db.rawQuery(
-        'SELECT MIN(number) AS first FROM ayah GROUP BY juz ORDER BY juz');
+      'SELECT MIN(number) AS first FROM ayah GROUP BY juz ORDER BY juz',
+    );
     return rows.map((r) => r['first'] as int).toList();
   }
 
-  Future<List<Ayah>> ayatOfPage(int page) async {
-    final rows = await _db.query('ayah',
-        where: 'page = ?', whereArgs: [page], orderBy: 'number');
+  Future<List<Ayah>> ayatOfPage(
+    int page, {
+    String translation = 'sahih',
+  }) async {
+    final rows = await _ayahRows(
+      translation: translation,
+      where: 'a.page = ?',
+      whereArgs: [page],
+      orderBy: 'a.number',
+    );
     return rows.map(Ayah.fromMap).toList();
   }
 
@@ -226,11 +313,13 @@ class AlimStore {
   }
 
   Future<int> pageOfAyah(int ayahNumber) async {
-    final rows = await _db.query('ayah',
-        columns: ['page'],
-        where: 'number = ?',
-        whereArgs: [ayahNumber],
-        limit: 1);
+    final rows = await _db.query(
+      'ayah',
+      columns: ['page'],
+      where: 'number = ?',
+      whereArgs: [ayahNumber],
+      limit: 1,
+    );
     return rows.single['page'] as int;
   }
 
@@ -243,7 +332,8 @@ class AlimStore {
   }
 
   Future<List<HadithBook>> hadithBooks(String collection) async {
-    final rows = await _db.rawQuery('''
+    final rows = await _db.rawQuery(
+      '''
       SELECT b.number, b.collection, b.title, COUNT(h.id) AS count
       FROM hadith_book b
       LEFT JOIN hadith h ON h.collection = b.collection AND h.book = b.number
@@ -251,14 +341,18 @@ class AlimStore {
       GROUP BY b.id
       HAVING count > 0
       ORDER BY b.number
-    ''', [collection]);
+    ''',
+      [collection],
+    );
     return rows
-        .map((m) => HadithBook(
-              number: m['number'] as int,
-              collection: m['collection'] as String,
-              title: m['title'] as String,
-              count: (m['count'] as int?) ?? 0,
-            ))
+        .map(
+          (m) => HadithBook(
+            number: m['number'] as int,
+            collection: m['collection'] as String,
+            title: m['title'] as String,
+            count: (m['count'] as int?) ?? 0,
+          ),
+        )
         .toList();
   }
 
@@ -270,7 +364,8 @@ class AlimStore {
   }) async {
     final q = query.trim();
     if (q.isEmpty) return const [];
-    final rows = await _db.rawQuery('''
+    final rows = await _db.rawQuery(
+      '''
       SELECT b.number, b.collection, b.title,
              (SELECT COUNT(*) FROM hadith h
                WHERE h.collection = b.collection AND h.book = b.number
@@ -285,20 +380,28 @@ class AlimStore {
                  ELSE 4
                END, b.number
       LIMIT ?
-    ''', ['%${q.toLowerCase()}%', limit]);
+    ''',
+      ['%${q.toLowerCase()}%', limit],
+    );
     return rows
-        .map((m) => HadithBook(
-              number: m['number'] as int,
-              collection: m['collection'] as String,
-              title: m['title'] as String,
-              count: (m['count'] as int?) ?? 0,
-            ))
+        .map(
+          (m) => HadithBook(
+            number: m['number'] as int,
+            collection: m['collection'] as String,
+            title: m['title'] as String,
+            count: (m['count'] as int?) ?? 0,
+          ),
+        )
         .toList();
   }
 
   Future<HadithCollection> hadithCollection(String id) async {
-    final rows = await _db.query('hadith_collection',
-        where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await _db.query(
+      'hadith_collection',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     return HadithCollection.fromMap(rows.single);
   }
 
@@ -308,18 +411,24 @@ class AlimStore {
     int limit = 2000,
     int offset = 0,
   }) async {
-    final rows = await _db.query('hadith',
-        where: "collection = ? AND book = ? AND TRIM(text_en) != ''",
-        whereArgs: [collection, book],
-        orderBy: 'number_in_book',
-        limit: limit,
-        offset: offset);
+    final rows = await _db.query(
+      'hadith',
+      where: "collection = ? AND book = ? AND TRIM(text_en) != ''",
+      whereArgs: [collection, book],
+      orderBy: 'number_in_book',
+      limit: limit,
+      offset: offset,
+    );
     return rows.map(Hadith.fromMap).toList();
   }
 
   Future<Hadith> hadithById(int id) async {
-    final rows =
-        await _db.query('hadith', where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await _db.query(
+      'hadith',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     return Hadith.fromMap(rows.single);
   }
 
@@ -338,17 +447,20 @@ class AlimStore {
 
   Future<int> shortHadithCount() async {
     final rows = await _db.rawQuery(
-        "SELECT COUNT(*) AS n FROM hadith WHERE short = 1 AND TRIM(text_en) != ''");
+      "SELECT COUNT(*) AS n FROM hadith WHERE short = 1 AND TRIM(text_en) != ''",
+    );
     return rows.single['n'] as int;
   }
 
   /// The nth short hadith, in a stable order, for "hadith of the day".
   Future<Hadith> shortHadithAt(int index) async {
-    final rows = await _db.query('hadith',
-        where: "short = 1 AND TRIM(text_en) != ''",
-        orderBy: 'id',
-        limit: 1,
-        offset: index);
+    final rows = await _db.query(
+      'hadith',
+      where: "short = 1 AND TRIM(text_en) != ''",
+      orderBy: 'id',
+      limit: 1,
+      offset: index,
+    );
     return Hadith.fromMap(rows.single);
   }
 
@@ -358,23 +470,33 @@ class AlimStore {
   }
 
   Future<Story> story(int id) async {
-    final rows =
-        await _db.query('story', where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await _db.query(
+      'story',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     return Story.fromMap(rows.single);
   }
 
   // ------------------------------------------------------------------- user
 
   Future<String?> kvGet(String key) async {
-    final rows = await _db
-        .query('user_kv', where: 'key = ?', whereArgs: [key], limit: 1);
+    final rows = await _db.query(
+      'user_kv',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
     if (rows.isEmpty) return null;
     return rows.single['value'] as String;
   }
 
   Future<void> kvSet(String key, String value) async {
-    await _db.insert('user_kv', {'key': key, 'value': value},
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _db.insert('user_kv', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<int?> lastRead() async {
@@ -382,21 +504,31 @@ class AlimStore {
     return raw == null ? null : int.tryParse(raw);
   }
 
-  Future<void> setLastRead(int ayahNumber) =>
-      kvSet('last_read', '$ayahNumber');
+  Future<void> setLastRead(int ayahNumber) => kvSet('last_read', '$ayahNumber');
 
   Future<bool> isBookmarked(String kind, int ref) async {
-    final rows = await _db.query('bookmark',
-        where: 'kind = ? AND ref = ?', whereArgs: [kind, ref], limit: 1);
+    final rows = await _db.query(
+      'bookmark',
+      where: 'kind = ? AND ref = ?',
+      whereArgs: [kind, ref],
+      limit: 1,
+    );
     return rows.isNotEmpty;
   }
 
   Future<void> toggleBookmark(String kind, int ref, String label) async {
-    final rows = await _db.query('bookmark',
-        where: 'kind = ? AND ref = ?', whereArgs: [kind, ref], limit: 1);
+    final rows = await _db.query(
+      'bookmark',
+      where: 'kind = ? AND ref = ?',
+      whereArgs: [kind, ref],
+      limit: 1,
+    );
     if (rows.isNotEmpty) {
-      await _db
-          .delete('bookmark', where: 'kind = ? AND ref = ?', whereArgs: [kind, ref]);
+      await _db.delete(
+        'bookmark',
+        where: 'kind = ? AND ref = ?',
+        whereArgs: [kind, ref],
+      );
       return;
     }
     await _db.insert('bookmark', {
@@ -408,10 +540,12 @@ class AlimStore {
   }
 
   Future<List<Bookmark>> bookmarks({String? kind}) async {
-    final rows = await _db.query('bookmark',
-        where: kind == null ? null : 'kind = ?',
-        whereArgs: kind == null ? null : [kind],
-        orderBy: 'created DESC');
+    final rows = await _db.query(
+      'bookmark',
+      where: kind == null ? null : 'kind = ?',
+      whereArgs: kind == null ? null : [kind],
+      orderBy: 'created DESC',
+    );
     return rows.map(Bookmark.fromMap).toList();
   }
 
@@ -421,12 +555,19 @@ class AlimStore {
   }
 
   Future<DayLog> day(String date) async {
-    final rows =
-        await _db.query('daily', where: 'date = ?', whereArgs: [date], limit: 1);
-    final gRows = await _db.query('gratitude',
-        where: 'date = ?', whereArgs: [date], limit: 1);
-    final gratitude =
-        gRows.isEmpty ? '' : gRows.single['text'] as String;
+    final rows = await _db.query(
+      'daily',
+      where: 'date = ?',
+      whereArgs: [date],
+      limit: 1,
+    );
+    final gRows = await _db.query(
+      'gratitude',
+      where: 'date = ?',
+      whereArgs: [date],
+      limit: 1,
+    );
+    final gratitude = gRows.isEmpty ? '' : gRows.single['text'] as String;
     if (rows.isEmpty) {
       return DayLog(
         date: date,
@@ -443,10 +584,13 @@ class AlimStore {
   }
 
   Future<void> _bump(String date, String column, int amount) async {
-    await _db.rawInsert('''
+    await _db.rawInsert(
+      '''
       INSERT INTO daily (date, $column) VALUES (?, ?)
       ON CONFLICT(date) DO UPDATE SET $column = $column + excluded.$column
-    ''', [date, amount]);
+    ''',
+      [date, amount],
+    );
   }
 
   Future<void> addVerses(String date, int n) => _bump(date, 'verses', n);
@@ -465,10 +609,13 @@ class AlimStore {
       current.remove(id);
     }
     final json = '{${current.map((t) => '"$t"').join(',')}}';
-    await _db.rawInsert('''
+    await _db.rawInsert(
+      '''
       INSERT INTO daily (date, tasks) VALUES (?, ?)
       ON CONFLICT(date) DO UPDATE SET tasks = excluded.tasks
-    ''', [date, json]);
+    ''',
+      [date, json],
+    );
   }
 
   Future<void> setGratitude(String date, String text) async {
@@ -476,14 +623,18 @@ class AlimStore {
       await _db.delete('gratitude', where: 'date = ?', whereArgs: [date]);
       return;
     }
-    await _db.insert('gratitude', {'date': date, 'text': text.trim()},
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _db.insert('gratitude', {
+      'date': date,
+      'text': text.trim(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Todo>> todos({bool includeDone = true}) async {
-    final rows = await _db.query('todo',
-        where: includeDone ? null : 'done = 0',
-        orderBy: 'done ASC, due IS NULL, due ASC, id ASC');
+    final rows = await _db.query(
+      'todo',
+      where: includeDone ? null : 'done = 0',
+      orderBy: 'done ASC, due IS NULL, due ASC, id ASC',
+    );
     return rows.map(Todo.fromMap).toList();
   }
 
@@ -497,8 +648,12 @@ class AlimStore {
   }
 
   Future<void> toggleTodo(int id) async {
-    final rows =
-        await _db.query('todo', where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await _db.query(
+      'todo',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     if (rows.isEmpty) return;
     final done = (rows.single['done'] as int? ?? 0) == 1;
     await _db.update(
@@ -518,13 +673,15 @@ class AlimStore {
 
   Future<JourneyStats> stats({required DateTime now}) async {
     Future<int> sum(String column) async {
-      final rows = await _db
-          .rawQuery('SELECT COALESCE(SUM($column), 0) AS n FROM daily');
+      final rows = await _db.rawQuery(
+        'SELECT COALESCE(SUM($column), 0) AS n FROM daily',
+      );
       return rows.single['n'] as int;
     }
 
     final rows = await _db.rawQuery(
-        'SELECT date FROM daily WHERE verses + hadiths + stories + dhikr + xp > 0 ORDER BY date');
+      'SELECT date FROM daily WHERE verses + hadiths + stories + dhikr + xp > 0 ORDER BY date',
+    );
     final dates = rows.map((r) => r['date'] as String).toList();
     final active = dates.toSet();
 
@@ -563,9 +720,12 @@ class AlimStore {
       prev = parsed;
     }
 
-    final bookmarkRows = await _db.rawQuery('SELECT COUNT(*) AS n FROM bookmark');
-    final storyRows =
-        await _db.rawQuery('SELECT COALESCE(SUM(stories), 0) AS n FROM daily');
+    final bookmarkRows = await _db.rawQuery(
+      'SELECT COUNT(*) AS n FROM bookmark',
+    );
+    final storyRows = await _db.rawQuery(
+      'SELECT COALESCE(SUM(stories), 0) AS n FROM daily',
+    );
     final perfectRaw = await kvGet('perfect_days');
 
     return JourneyStats(
@@ -614,8 +774,9 @@ String normalizeArabic(String input) {
   final buffer = StringBuffer();
   for (final rune in input.runes) {
     final ch = String.fromCharCode(rune);
-    if (RegExp(r'[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u0640]')
-        .hasMatch(ch)) {
+    if (RegExp(
+      r'[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u0640]',
+    ).hasMatch(ch)) {
       continue;
     }
     switch (ch) {

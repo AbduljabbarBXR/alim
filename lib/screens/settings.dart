@@ -12,6 +12,85 @@ import 'onboarding.dart';
 import 'prayer.dart';
 import 'qibla.dart';
 
+String _translationLabel(WidgetRef ref, String slug) {
+  final items = ref.watch(translationsProvider).valueOrNull;
+  if (items != null) {
+    for (final t in items) {
+      if (t.slug == slug) return '${t.translator}, ${t.year}';
+    }
+  }
+  return 'Saheeh International';
+}
+
+Future<void> _pickTranslation(
+  BuildContext context,
+  WidgetRef ref,
+  Profile profile,
+) async {
+  final items = await ref.read(translationsProvider.future);
+  if (!context.mounted) return;
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder:
+        (sheetContext) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: AlimSpace.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AlimSpace.lg,
+                    0,
+                    AlimSpace.lg,
+                    AlimSpace.xs,
+                  ),
+                  child: Text(
+                    'English translation',
+                    style: Theme.of(sheetContext).textTheme.titleMedium,
+                  ),
+                ),
+                for (final t in items)
+                  RadioListTile<String>(
+                    value: t.slug,
+                    groupValue: profile.translation,
+                    title: Text(t.title),
+                    subtitle: Text('${t.translator}, ${t.year}'),
+                    onChanged: (value) async {
+                      if (value == null) return;
+                      await ref
+                          .read(actionsProvider)
+                          .saveProfile(profile.copyWith(translation: value));
+                      if (sheetContext.mounted) {
+                        Navigator.of(sheetContext).pop();
+                      }
+                    },
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AlimSpace.lg,
+                    AlimSpace.xs,
+                    AlimSpace.lg,
+                    0,
+                  ),
+                  child: Text(
+                    'Translations via Tanzil.net, kept verbatim.',
+                    style: TextStyle(
+                      color: AlimColors.mutedOf(sheetContext),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+  );
+}
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -61,9 +140,10 @@ class SettingsScreen extends ConsumerWidget {
                         ChoiceChip(
                           label: Text('$n'),
                           selected: profile.versesGoal == n,
-                          onSelected: (_) => actions.saveProfile(
-                            profile.copyWith(versesGoal: n),
-                          ),
+                          onSelected:
+                              (_) => actions.saveProfile(
+                                profile.copyWith(versesGoal: n),
+                              ),
                         ),
                     ],
                   ),
@@ -79,10 +159,20 @@ class SettingsScreen extends ConsumerWidget {
                 SwitchListTile(
                   secondary: const Icon(Icons.translate),
                   title: const Text('English translation'),
-                  subtitle: const Text('Yusuf Ali, beside the Arabic'),
+                  subtitle: const Text('Beside the Arabic, on every ayah'),
                   value: profile.translationOn,
-                  onChanged: (v) =>
-                      actions.saveProfile(profile.copyWith(translationOn: v)),
+                  onChanged:
+                      (v) => actions.saveProfile(
+                        profile.copyWith(translationOn: v),
+                      ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: const Text('Translation'),
+                  subtitle: Text(_translationLabel(ref, profile.translation)),
+                  trailing: const Icon(Icons.chevron_right, size: 19),
+                  onTap: () => _pickTranslation(context, ref, profile),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -94,8 +184,10 @@ class SettingsScreen extends ConsumerWidget {
                     max: 1.6,
                     divisions: 8,
                     label: '${(profile.arabicScale * 100).round()}%',
-                    onChanged: (v) =>
-                        actions.saveProfile(profile.copyWith(arabicScale: v)),
+                    onChanged:
+                        (v) => actions.saveProfile(
+                          profile.copyWith(arabicScale: v),
+                        ),
                   ),
                 ),
               ],
@@ -129,7 +221,8 @@ class SettingsScreen extends ConsumerWidget {
                       await Notifications.scheduleDaily(
                         hour: profile.reminderHour,
                         minute: profile.reminderMinute,
-                        body: 'Your day has a few open pages. Qur\'an, a '
+                        body:
+                            'Your day has a few open pages. Qur\'an, a '
                             'hadith, a dhikr.',
                       );
                     } else {
@@ -160,13 +253,16 @@ class SettingsScreen extends ConsumerWidget {
                         await Notifications.scheduleDaily(
                           hour: picked.hour,
                           minute: picked.minute,
-                          body: 'Your day has a few open pages. Qur\'an, a '
+                          body:
+                              'Your day has a few open pages. Qur\'an, a '
                               'hadith, a dhikr.',
                         );
-                        await actions.saveProfile(profile.copyWith(
-                          reminderHour: picked.hour,
-                          reminderMinute: picked.minute,
-                        ));
+                        await actions.saveProfile(
+                          profile.copyWith(
+                            reminderHour: picked.hour,
+                            reminderMinute: picked.minute,
+                          ),
+                        );
                       }
                     },
                   ),
@@ -177,8 +273,8 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Dark mode'),
                   subtitle: const Text('A darker palette for late hours'),
                   value: profile.darkMode,
-                  onChanged: (v) =>
-                      actions.saveProfile(profile.copyWith(darkMode: v)),
+                  onChanged:
+                      (v) => actions.saveProfile(profile.copyWith(darkMode: v)),
                 ),
               ],
             ),
@@ -205,9 +301,10 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Prayer times'),
                   subtitle: const Text('Calculated for your coordinates'),
                   trailing: const Icon(Icons.chevron_right, size: 19),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const PrayerScreen()),
-                  ),
+                  onTap:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const PrayerScreen()),
+                      ),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -215,9 +312,10 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Qibla'),
                   subtitle: const Text('A compass to the Kaaba'),
                   trailing: const Icon(Icons.chevron_right, size: 19),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const QiblaScreen()),
-                  ),
+                  onTap:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const QiblaScreen()),
+                      ),
                 ),
               ],
             ),
@@ -231,19 +329,25 @@ class SettingsScreen extends ConsumerWidget {
                 title: const Text('Study companion'),
                 subtitle: const Text('Ask about what you are reading'),
                 trailing: const Icon(Icons.chevron_right, size: 19),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const CompanionScreen()),
-                ),
+                onTap:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CompanionScreen(),
+                      ),
+                    ),
               ),
             ),
           ],
-          const SectionHeader('About the sources'),          AlimCard(
+          const SectionHeader('About the sources'),
+          AlimCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final line in const [
-                  'Qur\'an: the Uthmani script with the Yusuf Ali '
-                      'translation of 1934 (public domain), all 6,236 ayat.',
+                  'Qur\'an: the Uthmani script and four English '
+                      'translations (Saheeh International, Pickthall, '
+                      'Yusuf Ali, Hilali and Khan) from Tanzil.net, all '
+                      '6,236 ayat.',
                   'Hadith: Sahih al-Bukhari, Sahih Muslim, an-Nawawi\'s '
                       'Forty, and the hadith Qudsi, every one of them '
                       'authentic.',
@@ -291,52 +395,52 @@ class SettingsScreen extends ConsumerWidget {
     final controller = TextEditingController(text: profile.name);
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('What should Alim call you?'),
-        content: TextField(controller: controller, autofocus: true),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('What should Alim call you?'),
+            content: TextField(controller: controller, autofocus: true),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, controller.text.trim()),
+                child: const Text('Save'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
     );
     if (name != null && name.isNotEmpty) {
-      await ref
-          .read(actionsProvider)
-          .saveProfile(profile.copyWith(name: name));
+      await ref.read(actionsProvider).saveProfile(profile.copyWith(name: name));
     }
   }
 
   Future<void> _confirmErase(BuildContext context, WidgetRef ref) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Erase everything?'),
-        content: const Text(
-          'Every counted ayah, hadith, story, dhikr, bookmark and task will '
-          'be gone. The Qur\'an and the hadith stay, of course.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep my data'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AlimColors.rose,
-              minimumSize: const Size(0, 44),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Erase everything?'),
+            content: const Text(
+              'Every counted ayah, hadith, story, dhikr, bookmark and task will '
+              'be gone. The Qur\'an and the hadith stay, of course.',
             ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Erase'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Keep my data'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AlimColors.rose,
+                  minimumSize: const Size(0, 44),
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Erase'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
     if (ok != true) return;
     await ref.read(storeProvider).eraseUserData();

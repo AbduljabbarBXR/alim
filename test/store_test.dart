@@ -31,8 +31,7 @@ void main() {
       expect(surahs.first.name, 'Al-Faatiha');
       expect(surahs.first.ayat, 7);
       expect(surahs.first.revelation, 'Mecca');
-      final total =
-          surahs.map((s) => s.ayat).fold<int>(0, (a, b) => a + b);
+      final total = surahs.map((s) => s.ayat).fold<int>(0, (a, b) => a + b);
       expect(total, 6236);
     });
 
@@ -71,13 +70,64 @@ void main() {
         expect(a.textEn.toLowerCase(), contains('charity'));
       }
     });
+
+    test('four translations, Saheeh International first', () async {
+      final items = await store.translations();
+      expect(items.map((t) => t.slug).toList(), [
+        'sahih',
+        'pickthall',
+        'yusufali',
+        'hilali',
+      ]);
+      expect(items.first.translator, 'Saheeh International');
+      for (final t in items) {
+        expect(t.source, 'Tanzil.net');
+      }
+    });
+
+    test('the reading follows the chosen translation', () async {
+      final sahih = await store.ayah(1);
+      expect(sahih.textEn, contains('Entirely Merciful'));
+      final pickthall = await store.ayah(1, translation: 'pickthall');
+      expect(pickthall.textEn, contains('Beneficent'));
+      final whole = await store.ayatOf(1, translation: 'yusufali');
+      expect(whole, hasLength(7));
+      expect(whole.every((a) => a.textEn.isNotEmpty), isTrue);
+    });
+
+    test('search speaks the chosen translation', () async {
+      final inSahih = await store.searchAyat('entirely merciful');
+      expect(inSahih, isNotEmpty);
+      final inPickthall = await store.searchAyat(
+        'entirely merciful',
+        translation: 'pickthall',
+      );
+      expect(inPickthall, isEmpty);
+      final ali = await store.searchAyat(
+        'guard against evil',
+        translation: 'yusufali',
+      );
+      expect(ali, isNotEmpty);
+      for (final a in ali.take(5)) {
+        expect(a.textEn.toLowerCase(), contains('guard against evil'));
+      }
+    });
+
+    test('an unknown translation falls back to the default', () async {
+      final a = await store.ayah(1, translation: 'not-a-translation');
+      expect(a.textEn, contains('Entirely Merciful'));
+    });
   });
 
   group('the hadith in the database', () {
     test('the four authentic collections line up', () async {
       final collections = await store.hadithCollections();
-      expect(collections.map((c) => c.id).toList(),
-          ['bukhari', 'muslim', 'nawawi', 'qudsi']);
+      expect(collections.map((c) => c.id).toList(), [
+        'bukhari',
+        'muslim',
+        'nawawi',
+        'qudsi',
+      ]);
       expect(collections[0].count, greaterThan(7000));
       expect(collections[2].count, 42);
       expect(collections[3].count, 40);
@@ -264,8 +314,12 @@ void main() {
     await before.close();
 
     final raw = await databaseFactory.openDatabase(p.join(dir.path, 'alim.db'));
-    await raw.update('meta', {'value': '1'},
-        where: 'key = ?', whereArgs: ['db_version']);
+    await raw.update(
+      'meta',
+      {'value': '1'},
+      where: 'key = ?',
+      whereArgs: ['db_version'],
+    );
     await raw.close();
 
     final after = await AlimStore.open(overridePath: dir.path);

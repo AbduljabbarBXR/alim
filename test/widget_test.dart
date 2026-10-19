@@ -4,6 +4,7 @@ import 'package:alim/data/store.dart';
 import 'package:alim/screens/mushaf.dart';
 import 'package:alim/screens/onboarding.dart';
 import 'package:alim/screens/quran_reader.dart';
+import 'package:alim/screens/settings.dart';
 import 'package:alim/screens/shell.dart';
 import 'package:alim/screens/stories.dart';
 import 'package:alim/state.dart';
@@ -37,15 +38,12 @@ void main() {
   });
 
   Widget wrap(Widget child) => ProviderScope(
-        overrides: [
-          storeProvider.overrideWithValue(store),
-          todayProvider.overrideWithValue(monday),
-        ],
-        child: MaterialApp(
-          theme: buildAlimTheme(Brightness.light),
-          home: child,
-        ),
-      );
+    overrides: [
+      storeProvider.overrideWithValue(store),
+      todayProvider.overrideWithValue(monday),
+    ],
+    child: MaterialApp(theme: buildAlimTheme(Brightness.light), home: child),
+  );
 
   Future<void> settle(WidgetTester tester) async {
     for (var i = 0; i < 8; i++) {
@@ -83,8 +81,9 @@ void main() {
     await scrollTo(tester, 'Hadith of the day');
   });
 
-  testWidgets('a manual task can be ticked and counts toward the day',
-      (tester) async {
+  testWidgets('a manual task can be ticked and counts toward the day', (
+    tester,
+  ) async {
     await tester.pumpWidget(wrap(const ShellScreen()));
     await settle(tester);
 
@@ -98,8 +97,9 @@ void main() {
     expect(find.text('1/5'), findsOneWidget);
   });
 
-  testWidgets('the reader counts an ayah and remembers the place',
-      (tester) async {
+  testWidgets('the reader counts an ayah and remembers the place', (
+    tester,
+  ) async {
     await tester.pumpWidget(wrap(const QuranReaderScreen(surah: 1)));
     await settle(tester);
 
@@ -143,8 +143,39 @@ void main() {
     expect(find.text('In the Sunnah'), findsNothing);
   });
 
-  testWidgets('onboarding walks name, goal and reminder into a saved profile',
-      (tester) async {
+  testWidgets('choosing a translation changes what the reader shows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(const SettingsScreen()));
+    await settle(tester);
+
+    await scrollTo(tester, 'Translation');
+    await tester.tap(find.text('Translation'));
+    await settle(tester);
+
+    expect(find.text('The Meaning of the Glorious Koran'), findsOneWidget);
+    await tester.tap(find.text('The Meaning of the Glorious Koran'));
+    await settle(tester);
+
+    final saved = await store.kvGet('profile');
+    expect(saved, contains('"translation":"pickthall"'));
+
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const QuranReaderScreen(surah: 1),
+      ),
+    );
+    await settle(tester);
+    expect(
+      find.text('In the name of Allah, the Beneficent, the Merciful.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('onboarding walks name, goal and reminder into a saved profile', (
+    tester,
+  ) async {
     await tester.pumpWidget(wrap(const OnboardingScreen()));
     await tester.pump();
 

@@ -3,7 +3,8 @@
 
 Sources (all public domain / open licence):
   * Quran Arabic  — fawazahmed0/quran-api, edition ara-quranuthmanihaf
-  * Quran English — fawazahmed0/quran-api, edition eng-abdullahyusufal (Yusuf Ali)
+  * Quran English — Tanzil.net translations (en.sahih, en.pickthall,
+                    en.yusufali, en.hilali), verbatim and attributed
   * Surah metadata — fawazahmed0/quran-api info.json
   * Hadith        — fawazahmed0/hadith-api, Sahih al-Bukhari, Sahih Muslim,
                     Forty Hadith of an-Nawawi, Forty Hadith Qudsi (eng + ara)
@@ -60,10 +61,43 @@ def load(name: str):
         return json.load(fh)
 
 
+TRANSLATIONS = [
+    ("sahih", "Saheeh International", "Saheeh International", "2011"),
+    ("pickthall", "The Meaning of the Glorious Koran", "Marmaduke Pickthall", "1930"),
+    ("yusufali", "The Holy Qur'an", "Abdullah Yusuf Ali", "1934"),
+    (
+        "hilali",
+        "Interpretation of the Meanings of the Noble Qur'an",
+        "Muhammad Muhsin Khan and Muhammad Taqi-ud-Din al-Hilali",
+        "1997",
+    ),
+]
+
+_TANZIL_LINE = re.compile(r"^(\d+)\|(\d+)\|(.*)$")
+
+
+def load_tanzil(slug: str):
+    """Reads a Tanzil translation file: `surah|ayah|text` per line."""
+    out = {}
+    with open(
+        os.path.join(SRC, f"tanzil_en_{slug}.txt"), encoding="utf-8"
+    ) as fh:
+        for line in fh:
+            m = _TANZIL_LINE.match(line.rstrip("\n"))
+            if not m:
+                continue
+            out[(int(m.group(1)), int(m.group(2)))] = m.group(3)
+    assert len(out) == 6236, (slug, len(out))
+    return out
+
+
 def main() -> None:
     info = load("quran_info.json")
     ar = load("quran_ar.min.json")["quran"]
-    en = load("quran_en.min.json")["quran"]
+    translations = {slug: load_tanzil(slug) for slug, *_ in TRANSLATIONS}
+    ar_keys = {(a["chapter"], a["verse"]) for a in ar}
+    for slug, text in translations.items():
+        assert set(text.keys()) == ar_keys, slug
     stories = []
     for part in ("a", "b", "c", "d"):
         path = os.path.join(ROOT, "tool", f"stories_{part}.json")
@@ -103,6 +137,26 @@ def main() -> None:
             en_search TEXT NOT NULL
         );
         CREATE INDEX idx_ayah_surah ON ayah(surah, ayah);
+
+        CREATE TABLE translation (
+            id INTEGER PRIMARY KEY,
+            slug TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            translator TEXT NOT NULL,
+            year TEXT NOT NULL,
+            source TEXT NOT NULL
+        );
+
+        CREATE TABLE ayah_translation (
+            ayah INTEGER NOT NULL REFERENCES ayah(number),
+            translation INTEGER NOT NULL REFERENCES translation(id),
+            text TEXT NOT NULL,
+            search TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX idx_ayah_translation
+            ON ayah_translation(ayah, translation);
+        CREATE INDEX idx_ayah_translation_text
+            ON ayah_translation(translation, ayah);
 
         CREATE TABLE hadith_collection (
             id TEXT PRIMARY KEY,
@@ -192,7 +246,7 @@ def main() -> None:
     for s in surahs:
         first[s["chapter"]] = n + 1
         n += len(s["verses"])
-    assert n == 6236 and len(ar) == 6236 and len(en) == 6236
+    assert n == 6236 and len(ar) == 6236
 
     meta_by_ayah = {}
     for s in surahs:
@@ -213,12 +267,20 @@ def main() -> None:
             ),
         )
 
+    for idx, (slug, title, translator, year) in enumerate(TRANSLATIONS, start=1):
+        c.execute(
+            "INSERT INTO translation VALUES (?,?,?,?,?,?)",
+            (idx, slug, title, translator, year, "Tanzil.net"),
+        )
+
     global_n = 0
     rows = []
-    for a, e in zip(ar, en):
+    trows = []
+    for a in ar:
         global_n += 1
-        assert a["chapter"] == e["chapter"] and a["verse"] == e["verse"]
-        m = meta_by_ayah[(a["chapter"], a["verse"])]
+        key = (a["chapter"], a["verse"])
+        m = meta_by_ayah[key]
+        text_en = translations["sahih"][key]
         rows.append(
             (
                 global_n,
@@ -228,12 +290,18 @@ def main() -> None:
                 m["page"],
                 1 if m.get("sajda") else 0,
                 a["text"],
-                e["text"],
+                text_en,
                 normalize_ar(a["text"]),
-                normalize_en(e["text"]),
+                normalize_en(text_en),
             )
         )
+        for idx, (slug, *_rest) in enumerate(TRANSLATIONS, start=1):
+            text = translations[slug][key]
+            trows.append((global_n, idx, text, normalize_en(text)))
     c.executemany("INSERT INTO ayah VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
+    c.executemany(
+        "INSERT INTO ayah_translation VALUES (?,?,?,?)", trows
+    )
 
     # --- Hadith ----------------------------------------------------------
     collections = [
@@ -387,10 +455,10 @@ def main() -> None:
             ),
         )
 
-    c.execute("INSERT INTO meta VALUES ('db_version', '3')")
+    c.execute("INSERT INTO meta VALUES ('db_version', '4')")
     c.execute("INSERT INTO meta VALUES ('ayatod', '')")
     c.execute("INSERT INTO meta VALUES ('quran_source', 'Uthmani Hafs text, fawazahmed0/quran-api (public domain)')")
-    c.execute("INSERT INTO meta VALUES ('quran_translation', 'Abdullah Yusuf Ali (1934, public domain)')")
+    c.execute("INSERT INTO meta VALUES ('quran_translation', 'Saheeh International (default), Pickthall, Yusuf Ali, Hilali and Khan, all via Tanzil.net')")
     c.execute("INSERT INTO meta VALUES ('hadith_source', 'fawazahmed0/hadith-api (Unlicense)')")
     db.commit()
 
@@ -398,6 +466,7 @@ def main() -> None:
     size = os.path.getsize(OUT)
     print(f"built {OUT}  {size/1e6:.1f} MB")
     print(f"  surahs: {len(surahs)}  ayat: 6236")
+    print(f"  translations: {len(TRANSLATIONS)} x 6236 rows")
     print(f"  hadith: {hadith_total} across {len(collections)} collections")
     print(f"  stories: {len(stories)}  ({story_total_words} words)")
     db.close()

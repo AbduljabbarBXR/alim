@@ -22,8 +22,11 @@ final revisionProvider = StateProvider<int>((ref) => 0);
 /// without a restart. Tests override it with a fixed date.
 final todayProvider = Provider<DateTime>((ref) {
   final now = DateTime.now();
-  final midnight = DateTime(now.year, now.month, now.day)
-      .add(const Duration(days: 1));
+  final midnight = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).add(const Duration(days: 1));
   final timer = Timer(
     midnight.difference(now) + const Duration(seconds: 5),
     () => ref.invalidateSelf(),
@@ -53,6 +56,7 @@ class ProfileNotifier extends StateNotifier<Profile> {
         name: m['name'] as String? ?? '',
         versesGoal: m['versesGoal'] as int? ?? 5,
         translationOn: m['translationOn'] as bool? ?? true,
+        translation: m['translation'] as String? ?? 'sahih',
         arabicScale: (m['arabicScale'] as num?)?.toDouble() ?? 1.0,
         darkMode: m['darkMode'] as bool? ?? false,
         reminderHour: m['reminderHour'] as int? ?? 20,
@@ -70,25 +74,34 @@ class ProfileNotifier extends StateNotifier<Profile> {
 
   Future<void> save(Profile next) async {
     state = next;
-    await _store.kvSet(_key, jsonEncode({
-      'name': next.name,
-      'versesGoal': next.versesGoal,
-      'translationOn': next.translationOn,
-      'arabicScale': next.arabicScale,
-      'darkMode': next.darkMode,
-      'reminderHour': next.reminderHour,
-      'reminderMinute': next.reminderMinute,
-      'reminderOn': next.reminderOn,
-      'prayerMethod': next.prayerMethod,
-      'asrHanafi': next.asrHanafi,
-    }));
+    await _store.kvSet(
+      _key,
+      jsonEncode({
+        'name': next.name,
+        'versesGoal': next.versesGoal,
+        'translationOn': next.translationOn,
+        'translation': next.translation,
+        'arabicScale': next.arabicScale,
+        'darkMode': next.darkMode,
+        'reminderHour': next.reminderHour,
+        'reminderMinute': next.reminderMinute,
+        'reminderOn': next.reminderOn,
+        'prayerMethod': next.prayerMethod,
+        'asrHanafi': next.asrHanafi,
+      }),
+    );
   }
 }
 
-final profileProvider =
-    StateNotifierProvider<ProfileNotifier, Profile>((ref) {
+final profileProvider = StateNotifierProvider<ProfileNotifier, Profile>((ref) {
   return ProfileNotifier(ref.watch(storeProvider));
 });
+
+/// The translation slug every reading surface follows. Changing it in
+/// settings rebuilds the reader, search and the verse of the day.
+final activeTranslationProvider = Provider<String>(
+  (ref) => ref.watch(profileProvider).translation,
+);
 
 // ---------------------------------------------------------------- content
 
@@ -103,16 +116,30 @@ class SurahView {
   final List<Ayah> ayat;
 }
 
-final surahViewProvider =
-    FutureProvider.family<SurahView, int>((ref, number) async {
+final surahViewProvider = FutureProvider.family<SurahView, int>((
+  ref,
+  number,
+) async {
   final store = ref.watch(storeProvider);
-  return SurahView(await store.surah(number), await store.ayatOf(number));
+  final translation = ref.watch(activeTranslationProvider);
+  return SurahView(
+    await store.surah(number),
+    await store.ayatOf(number, translation: translation),
+  );
 });
 
-final searchProvider =
-    FutureProvider.family<List<Ayah>, String>((ref, query) async {
+final translationsProvider = FutureProvider<List<Translation>>((ref) {
+  return ref.watch(storeProvider).translations();
+});
+
+final searchProvider = FutureProvider.family<List<Ayah>, String>((
+  ref,
+  query,
+) async {
   if (query.trim().length < 2) return const [];
-  return ref.watch(storeProvider).searchAyat(query);
+  return ref
+      .watch(storeProvider)
+      .searchAyat(query, translation: ref.watch(activeTranslationProvider));
 });
 
 final juzStartsProvider = FutureProvider<List<int>>((ref) {
@@ -123,19 +150,27 @@ final pageCountProvider = FutureProvider<int>((ref) {
   return ref.watch(storeProvider).pageCount();
 });
 
-final pageAyatProvider =
-    FutureProvider.family<List<Ayah>, int>((ref, page) {
-  return ref.watch(storeProvider).ayatOfPage(page);
+final pageAyatProvider = FutureProvider.family<List<Ayah>, int>((ref, page) {
+  return ref
+      .watch(storeProvider)
+      .ayatOfPage(page, translation: ref.watch(activeTranslationProvider));
 });
 
 final ayahProvider = FutureProvider.family<Ayah, int>((ref, number) {
-  return ref.watch(storeProvider).ayah(number);
+  return ref
+      .watch(storeProvider)
+      .ayah(number, translation: ref.watch(activeTranslationProvider));
 });
 
-final ayahAtProvider =
-    FutureProvider.family<Ayah, (int, int)>((ref, ref2) async {
+final ayahAtProvider = FutureProvider.family<Ayah, (int, int)>((
+  ref,
+  ref2,
+) async {
   final store = ref.watch(storeProvider);
-  final rows = await store.ayatOf(ref2.$1);
+  final rows = await store.ayatOf(
+    ref2.$1,
+    translation: ref.watch(activeTranslationProvider),
+  );
   return rows.firstWhere((a) => a.ayah == ref2.$2);
 });
 
@@ -143,8 +178,10 @@ final hadithCollectionsProvider = FutureProvider<List<HadithCollection>>((ref) {
   return ref.watch(storeProvider).hadithCollections();
 });
 
-final hadithBooksProvider =
-    FutureProvider.family<List<HadithBook>, String>((ref, collection) {
+final hadithBooksProvider = FutureProvider.family<List<HadithBook>, String>((
+  ref,
+  collection,
+) {
   return ref.watch(storeProvider).hadithBooks(collection);
 });
 
@@ -159,24 +196,26 @@ class HadithPage {
 
 final hadithPageProvider =
     FutureProvider.family<List<Hadith>, (String, int, int)>((ref, args) {
-  return ref
-      .watch(storeProvider)
-      .hadithsOfBook(args.$1, args.$2, offset: args.$3);
-});
+      return ref
+          .watch(storeProvider)
+          .hadithsOfBook(args.$1, args.$2, offset: args.$3);
+    });
 
 final hadithByIdProvider = FutureProvider.family<Hadith, int>((ref, id) {
   return ref.watch(storeProvider).hadithById(id);
 });
 
-final hadithSearchProvider =
-    FutureProvider.family<List<Hadith>, String>((ref, query) {
+final hadithSearchProvider = FutureProvider.family<List<Hadith>, String>((
+  ref,
+  query,
+) {
   return ref.watch(storeProvider).searchHadith(query, limit: 60);
 });
 
 final hadithBookSearchProvider =
     FutureProvider.family<List<HadithBook>, String>((ref, query) {
-  return ref.watch(storeProvider).searchHadithBooks(query);
-});
+      return ref.watch(storeProvider).searchHadithBooks(query);
+    });
 
 final shortHadithCountProvider = FutureProvider<int>((ref) {
   return ref.watch(storeProvider).shortHadithCount();
@@ -200,7 +239,11 @@ final storyProvider = FutureProvider.family<Story, int>((ref, id) {
 final verseOfDayProvider = FutureProvider<Ayah>((ref) {
   final ref2 = verseRefOfDay(ref.watch(todayProvider));
   final store = ref.watch(storeProvider);
-  return store.ayahAt(ref2[0], ref2[1]);
+  return store.ayahAt(
+    ref2[0],
+    ref2[1],
+    translation: ref.watch(activeTranslationProvider),
+  );
 });
 
 final surahOfAyahProvider = FutureProvider.family<Surah, int>((ref, ayah) {
@@ -271,13 +314,18 @@ final weeklyProvider = FutureProvider<List<int>>((ref) {
       .versesLastDays(7, now: ref.watch(todayProvider));
 });
 
-final bookmarksProvider =
-    FutureProvider.family<List<Bookmark>, String?>((ref, kind) {
+final bookmarksProvider = FutureProvider.family<List<Bookmark>, String?>((
+  ref,
+  kind,
+) {
   ref.watch(revisionProvider);
   return ref.watch(storeProvider).bookmarks(kind: kind);
 });
 
-final bookmarkAtProvider = FutureProvider.family<bool, (String, int)>((ref, key) {
+final bookmarkAtProvider = FutureProvider.family<bool, (String, int)>((
+  ref,
+  key,
+) {
   ref.watch(revisionProvider);
   return ref.watch(storeProvider).isBookmarked(key.$1, key.$2);
 });
@@ -298,11 +346,7 @@ final readSetProvider = FutureProvider<Set<int>>((ref) async {
   ref.watch(revisionProvider);
   final date = dayKey(ref.watch(todayProvider));
   final raw = await ref.watch(storeProvider).kvGet('read_set_$date') ?? '';
-  return raw
-      .split(',')
-      .where((s) => s.isNotEmpty)
-      .map(int.parse)
-      .toSet();
+  return raw.split(',').where((s) => s.isNotEmpty).map(int.parse).toSet();
 });
 
 /// Hadith ids counted as learned today, so each hadith counts once per day.
@@ -311,11 +355,7 @@ final hadithReadSetProvider = FutureProvider<Set<int>>((ref) async {
   final date = dayKey(ref.watch(todayProvider));
   final raw =
       await ref.watch(storeProvider).kvGet('hadith_read_set_$date') ?? '';
-  return raw
-      .split(',')
-      .where((s) => s.isNotEmpty)
-      .map(int.parse)
-      .toSet();
+  return raw.split(',').where((s) => s.isNotEmpty).map(int.parse).toSet();
 });
 
 // ---------------------------------------------------------------- actions
@@ -335,10 +375,8 @@ class AlimActions {
 
   Future<DayLog> _logNow() => _store.day(_today);
 
-  List<DailyTask> _tasksNow() => buildDailyTasks(
-        date: _now,
-        versesGoal: _profile.versesGoal,
-      );
+  List<DailyTask> _tasksNow() =>
+      buildDailyTasks(date: _now, versesGoal: _profile.versesGoal);
 
   /// Awards XP for every task that crossed from open to done because of the
   /// activity, then the all-tasks bonus, once.
@@ -359,7 +397,8 @@ class AlimActions {
       if (await _store.kvGet(key) == null) {
         await _store.kvSet(key, '1');
         await _store.addXp(_today, allTasksBonus);
-        final perfect = int.tryParse(await _store.kvGet('perfect_days') ?? '') ?? 0;
+        final perfect =
+            int.tryParse(await _store.kvGet('perfect_days') ?? '') ?? 0;
         await _store.kvSet('perfect_days', '${perfect + 1}');
       }
     }
@@ -371,8 +410,10 @@ class AlimActions {
     await _store.setTaskDone(_today, id, done);
     if (done) {
       final tasks = _tasksNow();
-      final task = tasks.firstWhere((t) => t.id == id,
-          orElse: () => tasks.last);
+      final task = tasks.firstWhere(
+        (t) => t.id == id,
+        orElse: () => tasks.last,
+      );
       final was = isTaskDone(task, before, before.tasks);
       if (!was) await _store.addXp(_today, task.xp);
     }
@@ -500,19 +541,94 @@ class AlimBadge {
 }
 
 final badges = <AlimBadge>[
-  AlimBadge('first-day', 'First light', 'A first day with Alim', (s) => s.activeDays >= 1),
-  AlimBadge('streak-7', 'Seven in a row', 'A full week of kept days', (s) => s.bestStreak >= 7),
-  AlimBadge('streak-30', 'Steadfast', 'Thirty days in a row', (s) => s.bestStreak >= 30),
-  AlimBadge('ayat-100', 'Hundred ayat', 'One hundred ayat read', (s) => s.verses >= 100),
-  AlimBadge('ayat-1000', 'A thousand ayat', 'One thousand ayat read', (s) => s.verses >= 1000),
-  AlimBadge('mushaf', 'The whole mushaf', 'All 6,236 ayat read at least once', (s) => s.verses >= 6236),
-  AlimBadge('hadith-40', 'Forty hadith', 'Forty authentic hadith learned', (s) => s.hadiths >= 40),
-  AlimBadge('hadith-500', 'Companion of hadith', 'Five hundred hadith learned', (s) => s.hadiths >= 500),
-  AlimBadge('dhikr-1000', 'Tongue moist', 'A thousand remembrances', (s) => s.dhikr >= 1000),
-  AlimBadge('story-all', 'The story keeper', 'Every story read', (s) => s.stories >= 46),
-  AlimBadge('perfect', 'A perfect day', 'Every task of a day completed', (s) => s.perfectDays >= 1),
-  AlimBadge('perfect-7', 'Perfect week', 'Seven perfect days', (s) => s.perfectDays >= 7),
-  AlimBadge('bookmarks', 'Thread keeper', 'Ten bookmarks saved', (s) => s.bookmarks >= 10),
-  AlimBadge('rank-devoted', 'Devoted', 'Nine hundred XP earned', (s) => s.xp >= 900),
-  AlimBadge('rank-alim', 'Alim', 'Twelve thousand XP earned', (s) => s.xp >= 12000),
+  AlimBadge(
+    'first-day',
+    'First light',
+    'A first day with Alim',
+    (s) => s.activeDays >= 1,
+  ),
+  AlimBadge(
+    'streak-7',
+    'Seven in a row',
+    'A full week of kept days',
+    (s) => s.bestStreak >= 7,
+  ),
+  AlimBadge(
+    'streak-30',
+    'Steadfast',
+    'Thirty days in a row',
+    (s) => s.bestStreak >= 30,
+  ),
+  AlimBadge(
+    'ayat-100',
+    'Hundred ayat',
+    'One hundred ayat read',
+    (s) => s.verses >= 100,
+  ),
+  AlimBadge(
+    'ayat-1000',
+    'A thousand ayat',
+    'One thousand ayat read',
+    (s) => s.verses >= 1000,
+  ),
+  AlimBadge(
+    'mushaf',
+    'The whole mushaf',
+    'All 6,236 ayat read at least once',
+    (s) => s.verses >= 6236,
+  ),
+  AlimBadge(
+    'hadith-40',
+    'Forty hadith',
+    'Forty authentic hadith learned',
+    (s) => s.hadiths >= 40,
+  ),
+  AlimBadge(
+    'hadith-500',
+    'Companion of hadith',
+    'Five hundred hadith learned',
+    (s) => s.hadiths >= 500,
+  ),
+  AlimBadge(
+    'dhikr-1000',
+    'Tongue moist',
+    'A thousand remembrances',
+    (s) => s.dhikr >= 1000,
+  ),
+  AlimBadge(
+    'story-all',
+    'The story keeper',
+    'Every story read',
+    (s) => s.stories >= 46,
+  ),
+  AlimBadge(
+    'perfect',
+    'A perfect day',
+    'Every task of a day completed',
+    (s) => s.perfectDays >= 1,
+  ),
+  AlimBadge(
+    'perfect-7',
+    'Perfect week',
+    'Seven perfect days',
+    (s) => s.perfectDays >= 7,
+  ),
+  AlimBadge(
+    'bookmarks',
+    'Thread keeper',
+    'Ten bookmarks saved',
+    (s) => s.bookmarks >= 10,
+  ),
+  AlimBadge(
+    'rank-devoted',
+    'Devoted',
+    'Nine hundred XP earned',
+    (s) => s.xp >= 900,
+  ),
+  AlimBadge(
+    'rank-alim',
+    'Alim',
+    'Twelve thousand XP earned',
+    (s) => s.xp >= 12000,
+  ),
 ];
