@@ -167,12 +167,6 @@ void main() {
       expect(a, b);
       expect(verseOfDayRefs, contains(a));
     });
-
-    test('the greeting is the same salaam at every hour', () {
-      expect(greetingFor(DateTime(2026, 1, 1, 3)), 'Peace be upon you');
-      expect(greetingFor(DateTime(2026, 1, 1, 9)), 'Peace be upon you');
-      expect(greetingFor(DateTime(2026, 1, 1, 21)), 'Peace be upon you');
-    });
   });
 
   group('Arabic search normalization', () {

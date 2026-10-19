@@ -87,7 +87,7 @@ class TodayScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              name.isEmpty ? greetingFor(now) : '${greetingFor(now)}, $name',
+              name.isEmpty ? 'Today' : name,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.4,

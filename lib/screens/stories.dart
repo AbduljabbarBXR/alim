@@ -25,50 +25,50 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
       appBar: AppBar(title: const Text('Stories')),
       body: switch (stories) {
         AsyncData(:final value) => Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AlimSpace.lg),
-                child: Row(
-                  children: [
-                    for (final f in const [
-                      'All',
-                      'Prophets',
-                      'Companions',
-                      'Chosen',
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.only(right: AlimSpace.xs),
-                        child: ChoiceChip(
-                          label: Text(f),
-                          selected: _filter == f,
-                          onSelected: (_) => setState(() => _filter = f),
-                        ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AlimSpace.lg),
+              child: Row(
+                children: [
+                  for (final f in const [
+                    'All',
+                    'Prophets',
+                    'Companions',
+                    'Chosen',
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(right: AlimSpace.xs),
+                      child: ChoiceChip(
+                        label: Text(f),
+                        selected: _filter == f,
+                        onSelected: (_) => setState(() => _filter = f),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
-              const SizedBox(height: AlimSpace.sm),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AlimSpace.lg,
-                    0,
-                    AlimSpace.lg,
-                    AlimSpace.xxl,
-                  ),
-                  children: [
-                    for (final s in value.where(
-                      (s) => _filter == 'All' || s.category == _filter,
-                    ))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AlimSpace.sm),
-                        child: _StoryCard(story: s),
-                      ),
-                  ],
+            ),
+            const SizedBox(height: AlimSpace.sm),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  AlimSpace.lg,
+                  0,
+                  AlimSpace.lg,
+                  AlimSpace.xxl,
                 ),
+                children: [
+                  for (final s in value.where(
+                    (s) => _filter == 'All' || s.category == _filter,
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AlimSpace.sm),
+                      child: _StoryCard(story: s),
+                    ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
         AsyncError(:final error) => Center(child: Text('$error')),
         _ => const Center(child: CircularProgressIndicator()),
       },
@@ -85,9 +85,10 @@ class _StoryCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final read = ref.watch(storyReadProvider(story.id)).valueOrNull ?? false;
     return AlimCard(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => StoryDetailScreen(story: story)),
-      ),
+      onTap:
+          () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => StoryDetailScreen(story: story)),
+          ),
       child: Row(
         children: [
           Expanded(
@@ -115,10 +116,7 @@ class _StoryCard extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    AlimPill(
-                      label: story.category,
-                      color: AlimColors.gold,
-                    ),
+                    AlimPill(label: story.category, color: AlimColors.gold),
                     const SizedBox(width: 6),
                     AlimPill(
                       label: '${story.minutes} min',
@@ -140,9 +138,10 @@ class _StoryCard extends ConsumerWidget {
           ),
           Icon(
             read ? Icons.check_circle : Icons.chevron_right,
-            color: read
-                ? Theme.of(context).colorScheme.primary
-                : AlimColors.mutedOf(context),
+            color:
+                read
+                    ? Theme.of(context).colorScheme.primary
+                    : AlimColors.mutedOf(context),
             size: read ? 22 : 20,
           ),
         ],
@@ -159,15 +158,14 @@ class StoryDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final read = ref.watch(storyReadProvider(story.id)).valueOrNull ?? false;
-    final ayah = story.ayahNumber == null
-        ? null
-        : ref.watch(ayahProvider(story.ayahNumber!)).valueOrNull;
-    final surah = ref
-        .watch(surahOfAyahProvider(story.ayahNumber ?? 1))
-        .valueOrNull;
+    final ayah =
+        story.ayahNumber == null
+            ? null
+            : ref.watch(ayahProvider(story.ayahNumber!)).valueOrNull;
+    final surah =
+        ref.watch(surahOfAyahProvider(story.ayahNumber ?? 1)).valueOrNull;
     final bookmarked =
-        ref.watch(bookmarkAtProvider(('story', story.id))).valueOrNull ??
-            false;
+        ref.watch(bookmarkAtProvider(('story', story.id))).valueOrNull ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -179,11 +177,10 @@ class StoryDetailScreen extends ConsumerWidget {
               bookmarked ? Icons.bookmark : Icons.bookmark_border,
               color: bookmarked ? AlimColors.gold : null,
             ),
-            onPressed: () => ref.read(actionsProvider).toggleBookmark(
-                  'story',
-                  story.id,
-                  story.title,
-                ),
+            onPressed:
+                () => ref
+                    .read(actionsProvider)
+                    .toggleBookmark('story', story.id, story.title),
           ),
         ],
       ),
@@ -202,9 +199,9 @@ class StoryDetailScreen extends ConsumerWidget {
                 Text(
                   story.title,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.4,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                  ),
                 ),
                 const SizedBox(height: AlimSpace.xs),
                 Row(
@@ -232,10 +229,7 @@ class StoryDetailScreen extends ConsumerWidget {
                     padding: const EdgeInsets.only(bottom: AlimSpace.md),
                     child: Text(
                       p,
-                      style: const TextStyle(
-                        fontSize: 15.5,
-                        height: 1.75,
-                      ),
+                      style: const TextStyle(fontSize: 15.5, height: 1.75),
                     ),
                   ),
               ],
@@ -244,14 +238,11 @@ class StoryDetailScreen extends ConsumerWidget {
           const SizedBox(height: AlimSpace.md),
           AlimCard(
             color: AlimColors.leafSoft.withValues(
-              alpha: Theme.of(context).brightness == Brightness.dark
-                  ? 0.08
-                  : 1,
+              alpha: Theme.of(context).brightness == Brightness.dark ? 0.08 : 1,
             ),
-            border: Theme.of(context)
-                .colorScheme
-                .primary
-                .withValues(alpha: 0.25),
+            border: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.25),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -309,14 +300,16 @@ class StoryDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: AlimSpace.xs),
                   OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => QuranReaderScreen(
-                          surah: ayah.surah,
-                          focusAyah: ayah.number,
+                    onPressed:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder:
+                                (_) => QuranReaderScreen(
+                                  surah: ayah.surah,
+                                  focusAyah: ayah.number,
+                                ),
+                          ),
                         ),
-                      ),
-                    ),
                     icon: const Icon(Icons.menu_book_outlined, size: 18),
                     label: const Text('Read it in context'),
                   ),
@@ -399,11 +392,12 @@ class _HadithSourceCard extends ConsumerWidget {
           ),
           const SizedBox(height: AlimSpace.xs),
           OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => HadithDetailScreen(hadith: hadith),
-              ),
-            ),
+            onPressed:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => HadithDetailScreen(hadith: hadith),
+                  ),
+                ),
             icon: const Icon(Icons.auto_stories_outlined, size: 18),
             label: const Text('Open the hadith'),
           ),

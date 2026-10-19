@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'data/store.dart';
 import 'services/audio.dart';
@@ -19,6 +20,12 @@ final storeProvider = Provider<AlimStore>(
 /// Bumped after every change to the person's own data. Everything that reads
 /// the daily log, bookmarks, todos or stats watches this and refetches.
 final revisionProvider = StateProvider<int>((ref) => 0);
+
+/// The installed version, read from the package itself so no screen has to
+/// hardcode it.
+final packageInfoProvider = FutureProvider<PackageInfo>(
+  (ref) => PackageInfo.fromPlatform(),
+);
 
 /// The wall clock, refreshed just after midnight so the day rolls over
 /// without a restart. Tests override it with a fixed date.

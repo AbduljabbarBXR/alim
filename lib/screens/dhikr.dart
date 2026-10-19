@@ -94,9 +94,7 @@ class _DhikrScreenState extends ConsumerState<DhikrScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AlimColors.card(context),
-                      border: Border.all(
-                        color: AlimColors.hairlineOf(context),
-                      ),
+                      border: Border.all(color: AlimColors.hairlineOf(context)),
                     ),
                     child: AnimatedSwitcher(
                       duration: AlimMotion.quick,
@@ -140,16 +138,18 @@ class _DhikrScreenState extends ConsumerState<DhikrScreen> {
                         child: Row(
                           children: [
                             Icon(
-                              count >= phaseFloor(dhikrPhases.indexOf(p)) +
-                                      p.count
+                              count >=
+                                      phaseFloor(dhikrPhases.indexOf(p)) +
+                                          p.count
                                   ? Icons.check_circle
                                   : Icons.circle_outlined,
                               size: 19,
-                              color: count >=
-                                      phaseFloor(dhikrPhases.indexOf(p)) +
-                                          p.count
-                                  ? Theme.of(context).colorScheme.primary
-                                  : AlimColors.mutedOf(context),
+                              color:
+                                  count >=
+                                          phaseFloor(dhikrPhases.indexOf(p)) +
+                                              p.count
+                                      ? Theme.of(context).colorScheme.primary
+                                      : AlimColors.mutedOf(context),
                             ),
                             const SizedBox(width: AlimSpace.sm),
                             Expanded(

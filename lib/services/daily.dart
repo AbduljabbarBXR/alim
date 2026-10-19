@@ -298,8 +298,6 @@ int chapterAfter(int ayahNumber, List<Surah> surahs) {
   return surahs.last.number;
 }
 
-String greetingFor(DateTime time) => 'Peace be upon you';
-
 /// A brief line shown when the day's ayah count reaches a meaningful number.
 String? readMilestone(int ayat) {
   switch (ayat) {

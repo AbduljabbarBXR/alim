@@ -6,13 +6,13 @@ import 'location.dart';
 enum AlimPrayer { fajr, sunrise, dhuhr, asr, maghrib, isha }
 
 String prayerLabel(AlimPrayer prayer) => switch (prayer) {
-      AlimPrayer.fajr => 'Fajr',
-      AlimPrayer.sunrise => 'Sunrise',
-      AlimPrayer.dhuhr => 'Dhuhr',
-      AlimPrayer.asr => 'Asr',
-      AlimPrayer.maghrib => 'Maghrib',
-      AlimPrayer.isha => 'Isha',
-    };
+  AlimPrayer.fajr => 'Fajr',
+  AlimPrayer.sunrise => 'Sunrise',
+  AlimPrayer.dhuhr => 'Dhuhr',
+  AlimPrayer.asr => 'Asr',
+  AlimPrayer.maghrib => 'Maghrib',
+  AlimPrayer.isha => 'Isha',
+};
 
 /// The calculation methods offered in the app, keyed by profile value.
 const prayerMethods = <String, String>{
@@ -25,13 +25,13 @@ const prayerMethods = <String, String>{
 };
 
 adhan.Prayer _toAdhan(AlimPrayer prayer) => switch (prayer) {
-      AlimPrayer.fajr => adhan.Prayer.fajr,
-      AlimPrayer.sunrise => adhan.Prayer.sunrise,
-      AlimPrayer.dhuhr => adhan.Prayer.dhuhr,
-      AlimPrayer.asr => adhan.Prayer.asr,
-      AlimPrayer.maghrib => adhan.Prayer.maghrib,
-      AlimPrayer.isha => adhan.Prayer.isha,
-    };
+  AlimPrayer.fajr => adhan.Prayer.fajr,
+  AlimPrayer.sunrise => adhan.Prayer.sunrise,
+  AlimPrayer.dhuhr => adhan.Prayer.dhuhr,
+  AlimPrayer.asr => adhan.Prayer.asr,
+  AlimPrayer.maghrib => adhan.Prayer.maghrib,
+  AlimPrayer.isha => adhan.Prayer.isha,
+};
 
 adhan.CalculationParameters _parameters(
   String method, {
@@ -90,9 +90,8 @@ class PrayerDay {
 }
 
 /// Degrees from true north towards the Kaaba.
-double qiblaBearing(AlimLocation place) => adhan.Qibla.qibla(
-      adhan.Coordinates(place.latitude, place.longitude),
-    );
+double qiblaBearing(AlimLocation place) =>
+    adhan.Qibla.qibla(adhan.Coordinates(place.latitude, place.longitude));
 
 /// How far apart two headings are, the short way round.
 double headingDelta(double a, double b) {

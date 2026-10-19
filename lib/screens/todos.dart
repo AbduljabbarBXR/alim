@@ -108,7 +108,8 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
           const SectionHeader('Open'),
           if (open.isEmpty)
             const EmptyNote(
-              text: 'Nothing open. Work is worship when it is honest. Add '
+              text:
+                  'Nothing open. Work is worship when it is honest. Add '
                   'what today asks of you.',
               icon: Icons.task_alt,
             )
@@ -121,7 +122,8 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
               ),
           if (done.isNotEmpty) ...[
             const SectionHeader('Done'),
-            for (final t in done) _TodoTile(todo: t, overdue: false, dueToday: false),
+            for (final t in done)
+              _TodoTile(todo: t, overdue: false, dueToday: false),
           ],
         ],
       ),
@@ -153,8 +155,7 @@ class _TodoTile extends ConsumerWidget {
           children: [
             Checkbox(
               value: todo.done,
-              onChanged: (_) =>
-                  ref.read(actionsProvider).toggleTodo(todo.id),
+              onChanged: (_) => ref.read(actionsProvider).toggleTodo(todo.id),
             ),
             Expanded(
               child: Column(
@@ -165,8 +166,7 @@ class _TodoTile extends ConsumerWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 14.5,
-                      decoration:
-                          todo.done ? TextDecoration.lineThrough : null,
+                      decoration: todo.done ? TextDecoration.lineThrough : null,
                       color: todo.done ? AlimColors.mutedOf(context) : null,
                     ),
                   ),
@@ -174,14 +174,16 @@ class _TodoTile extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: AlimPill(
-                        label: overdue
-                            ? 'Overdue · ${todo.due}'
-                            : dueToday
+                        label:
+                            overdue
+                                ? 'Overdue · ${todo.due}'
+                                : dueToday
                                 ? 'Today'
                                 : 'Due ${todo.due}',
-                        color: overdue
-                            ? AlimColors.rose
-                            : dueToday
+                        color:
+                            overdue
+                                ? AlimColors.rose
+                                : dueToday
                                 ? AlimColors.gold
                                 : AlimColors.mutedOf(context),
                         icon: Icons.event,

@@ -18,6 +18,8 @@ class MeScreen extends ConsumerWidget {
     final profile = ref.watch(profileProvider);
     final stats = ref.watch(statsProvider).valueOrNull;
     final weekly = ref.watch(weeklyProvider).valueOrNull ?? const <int>[];
+    final info = ref.watch(packageInfoProvider).valueOrNull;
+    final now = ref.watch(todayProvider);
     final bookmarks =
         ref.watch(bookmarksProvider(null)).valueOrNull?.length ?? 0;
 
@@ -28,9 +30,10 @@ class MeScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
+            onPressed:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
           ),
         ],
       ),
@@ -87,38 +90,46 @@ class MeScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SectionHeader('This week'),
+            const SectionHeader('Last seven days'),
             AlimCard(
-              child: weekly.every((v) => v == 0)
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: AlimSpace.md),
-                      child: Text(
-                        'A quiet week so far. The first counted ayah starts the '
-                        'line.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AlimColors.mutedOf(context),
-                          height: 1.5,
+              child:
+                  weekly.every((v) => v == 0)
+                      ? Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AlimSpace.md,
+                        ),
+                        child: Text(
+                          'A quiet week so far. The first counted ayah starts the '
+                          'line.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AlimColors.mutedOf(context),
+                            height: 1.5,
+                          ),
+                        ),
+                      )
+                      : SizedBox(
+                        height: 110,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            for (var i = 0; i < weekly.length; i++)
+                              Expanded(
+                                child: _bar(
+                                  context,
+                                  weekly[i],
+                                  _initial(
+                                    now.subtract(
+                                      Duration(days: weekly.length - 1 - i),
+                                    ),
+                                  ),
+                                  i == weekly.length - 1,
+                                  weekly.reduce((a, b) => a > b ? a : b),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                    )
-                  : SizedBox(
-                      height: 110,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          for (var i = 0; i < weekly.length; i++)
-                            Expanded(
-                              child: _bar(
-                                context,
-                                weekly[i],
-                                i,
-                                weekly.reduce((a, b) => a > b ? a : b),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
             ),
             const SectionHeader('Badges'),
             AlimCard(
@@ -127,11 +138,7 @@ class MeScreen extends ConsumerWidget {
                 runSpacing: AlimSpace.xs,
                 children: [
                   for (final b in badges)
-                    _badge(
-                      context,
-                      b,
-                      stats == null ? false : b.earned(stats),
-                    ),
+                    _badge(context, b, stats == null ? false : b.earned(stats)),
                 ],
               ),
             ),
@@ -145,11 +152,12 @@ class MeScreen extends ConsumerWidget {
                     title: const Text('My bookmarks'),
                     subtitle: Text('$bookmarks kept'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const BookmarksScreen(),
-                      ),
-                    ),
+                    onTap:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const BookmarksScreen(),
+                          ),
+                        ),
                   ),
                   const Divider(height: 1),
                   ListTile(
@@ -157,9 +165,12 @@ class MeScreen extends ConsumerWidget {
                     title: const Text('My tasks'),
                     subtitle: const Text('The work side of the day'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const MyTasksScreen()),
-                    ),
+                    onTap:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const MyTasksScreen(),
+                          ),
+                        ),
                   ),
                 ],
               ),
@@ -167,7 +178,7 @@ class MeScreen extends ConsumerWidget {
             const SizedBox(height: AlimSpace.md),
             Center(
               child: Text(
-                'Alim 1.0.0',
+                'Alim ${info?.version ?? '1.4.1'}',
                 style: TextStyle(
                   color: AlimColors.mutedOf(context),
                   fontSize: 12,
@@ -196,8 +207,8 @@ class MeScreen extends ConsumerWidget {
                   Text(
                     profile.name.isEmpty ? 'Seeker' : profile.name,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -243,8 +254,15 @@ class MeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _bar(BuildContext context, int value, int index, int max) {
-    const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  Widget _bar(
+    BuildContext context,
+    int value,
+    String label,
+    bool today,
+    int max,
+  ) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final muted = AlimColors.mutedOf(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Column(
@@ -255,7 +273,7 @@ class MeScreen extends ConsumerWidget {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: AlimColors.mutedOf(context),
+              color: today ? primary : muted,
             ),
           ),
           const SizedBox(height: 4),
@@ -264,20 +282,25 @@ class MeScreen extends ConsumerWidget {
             curve: AlimMotion.ease,
             height: max == 0 ? 6 : (10 + 62 * (value / max)),
             decoration: BoxDecoration(
-              color: value == 0
-                  ? AlimColors.hairlineOf(context)
-                  : Theme.of(context).colorScheme.primary.withValues(
-                        alpha: 0.35 + 0.65 * (max == 0 ? 0 : value / max),
+              color:
+                  value == 0
+                      ? AlimColors.hairlineOf(context)
+                      : primary.withValues(
+                        alpha:
+                            today
+                                ? 0.95
+                                : 0.35 + 0.65 * (max == 0 ? 0 : value / max),
                       ),
               borderRadius: BorderRadius.circular(6),
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            labels[index % 7],
+            label,
             style: TextStyle(
               fontSize: 11,
-              color: AlimColors.mutedOf(context),
+              fontWeight: today ? FontWeight.w800 : FontWeight.w400,
+              color: today ? primary : muted,
             ),
           ),
         ],
@@ -322,3 +345,8 @@ class MeScreen extends ConsumerWidget {
     );
   }
 }
+
+/// The initial of the weekday, from the date itself, so the little week
+/// chart always lines up with real days.
+String _initial(DateTime date) =>
+    const ['M', 'T', 'W', 'T', 'F', 'S', 'S'][date.weekday - 1];

@@ -61,17 +61,20 @@ class _MushafScreenState extends ConsumerState<MushafScreen> {
         ),
       ),
       body: pageCount.when(
-        data: (count) => !_ready
-            ? const Center(child: CircularProgressIndicator())
-            : PageView.builder(
-                controller: _controller,
-                itemCount: count,
-                onPageChanged: (i) => setState(() => _page = i + 1),
-                itemBuilder: (context, i) => _MushafPage(
-                  page: i + 1,
-                  highlight: widget.initialAyah,
-                ),
-              ),
+        data:
+            (count) =>
+                !_ready
+                    ? const Center(child: CircularProgressIndicator())
+                    : PageView.builder(
+                      controller: _controller,
+                      itemCount: count,
+                      onPageChanged: (i) => setState(() => _page = i + 1),
+                      itemBuilder:
+                          (context, i) => _MushafPage(
+                            page: i + 1,
+                            highlight: widget.initialAyah,
+                          ),
+                    ),
         error: (e, _) => Center(child: Text('$e')),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
@@ -105,8 +108,7 @@ class _MushafPage extends ConsumerWidget {
         final children = <Widget>[];
         var runStart = 0;
         for (var i = 0; i <= list.length; i++) {
-          final end =
-              i == list.length || list[i].surah != list[runStart].surah;
+          final end = i == list.length || list[i].surah != list[runStart].surah;
           if (!end) continue;
           final run = list.sublist(runStart, i);
           final surah = surahOf(run.first.surah);
@@ -115,27 +117,35 @@ class _MushafPage extends ConsumerWidget {
           } else {
             children.add(_surahBand(context, surah));
             if (run.first.surah != 1 && run.first.surah != 9) {
-              children.add(const Padding(
-                padding: EdgeInsets.only(top: AlimSpace.sm),
-                child: BismillahBand(),
-              ));
+              children.add(
+                const Padding(
+                  padding: EdgeInsets.only(top: AlimSpace.sm),
+                  child: BismillahBand(),
+                ),
+              );
             }
           }
-          children.add(Padding(
-            padding: const EdgeInsets.only(top: AlimSpace.md),
-            child: _text(context, run),
-          ));
+          children.add(
+            Padding(
+              padding: const EdgeInsets.only(top: AlimSpace.md),
+              child: _text(context, run),
+            ),
+          );
           runStart = i;
         }
-        children.add(Padding(
-          padding: const EdgeInsets.only(top: AlimSpace.lg),
-          child: Text(
-            'Page $page',
-            textAlign: TextAlign.center,
-            style:
-                TextStyle(color: AlimColors.mutedOf(context), fontSize: 12),
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: AlimSpace.lg),
+            child: Text(
+              'Page $page',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AlimColors.mutedOf(context),
+                fontSize: 12,
+              ),
+            ),
           ),
-        ));
+        );
         return ListView(
           padding: const EdgeInsets.fromLTRB(
             AlimSpace.lg,
@@ -228,17 +238,19 @@ class _MushafPage extends ConsumerWidget {
     );
     final spans = <TextSpan>[];
     for (final a in run) {
-      spans.add(TextSpan(
-        text: '${a.textAr} ',
-        style: a.number == highlight
-            ? base.copyWith(
-                backgroundColor: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.13),
-              )
-            : base,
-      ));
+      spans.add(
+        TextSpan(
+          text: '${a.textAr} ',
+          style:
+              a.number == highlight
+                  ? base.copyWith(
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.13),
+                  )
+                  : base,
+        ),
+      );
       spans.add(TextSpan(text: '۝${_digits(a.ayah)} ', style: mark));
     }
     return Text.rich(

@@ -35,7 +35,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void _next() {
     if (_step == 0 && _name.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A name to call you by, even a short one.')),
+        const SnackBar(
+          content: Text('A name to call you by, even a short one.'),
+        ),
       );
       return;
     }
@@ -61,9 +63,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
     await ref.read(actionsProvider).saveProfile(profile);
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const ShellScreen()),
-    );
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const ShellScreen()));
     if (_reminderOn) {
       unawaited(_setupReminder(profile));
     }
@@ -95,11 +97,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: PageView(
                 controller: _controller,
                 physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _welcome(),
-                  _goalStep(),
-                  _reminderStep(),
-                ],
+                children: [_welcome(), _goalStep(), _reminderStep()],
               ),
             ),
             Padding(
@@ -144,9 +142,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           Text(
             'Alim',
             style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1,
-                ),
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1,
+            ),
           ),
           Text(
             'عالم',
@@ -193,9 +191,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           const Spacer(),
           Text(
             'A daily portion of Qur\'an',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AlimSpace.xs),
           Text(
@@ -220,8 +218,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           AlimCard(
             child: Row(
               children: [
-                const Icon(Icons.local_florist_outlined,
-                    color: AlimColors.gold),
+                const Icon(
+                  Icons.local_florist_outlined,
+                  color: AlimColors.gold,
+                ),
                 const SizedBox(width: AlimSpace.sm),
                 Expanded(
                   child: Text(
@@ -250,9 +250,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           const Spacer(),
           Text(
             'One quiet reminder a day',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: AlimSpace.xs),
           Text(

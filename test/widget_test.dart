@@ -118,6 +118,21 @@ void main() {
     expect(await store.lastRead(), 1);
   });
 
+  testWidgets('swiping the reader carries on to the next surah and back', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(const QuranReaderScreen(surah: 1)));
+    await settle(tester);
+
+    await tester.fling(find.text('Al-Faatiha 1:1'), const Offset(-400, 0), 900);
+    await settle(tester);
+    expect(find.text('Al-Baqara 2:1'), findsOneWidget);
+
+    await tester.fling(find.text('Al-Baqara 2:1'), const Offset(400, 0), 900);
+    await settle(tester);
+    expect(find.text('Al-Faatiha 1:1'), findsOneWidget);
+  });
+
   testWidgets('the mushaf opens on the page of the day', (tester) async {
     await tester.pumpWidget(wrap(const MushafScreen(initialAyah: 1)));
     await settle(tester);

@@ -133,12 +133,19 @@ class DownloadTask {
     this.progress = 0,
     this.detail,
     this.error,
+    this.bytes = 0,
+    this.totalBytes = 0,
   });
 
   final DownloadPhase phase;
   final double progress;
   final String? detail;
   final String? error;
+
+  /// How many bytes have landed so far, and how many are expected when the
+  /// server tells us. Zero total means the size is not known yet.
+  final int bytes;
+  final int totalBytes;
 
   bool get busy =>
       phase == DownloadPhase.downloading || phase == DownloadPhase.extracting;
@@ -148,12 +155,22 @@ class DownloadTask {
     double? progress,
     String? detail,
     String? error,
+    int? bytes,
+    int? totalBytes,
   }) => DownloadTask(
     phase: phase ?? this.phase,
     progress: progress ?? this.progress,
     detail: detail ?? this.detail,
     error: error ?? this.error,
+    bytes: bytes ?? this.bytes,
+    totalBytes: totalBytes ?? this.totalBytes,
   );
+}
+
+/// A readable size, so every progress line carries the weight of the file.
+String _mb(int bytes) {
+  final value = bytes / (1024 * 1024);
+  return '${value >= 10 ? value.toStringAsFixed(0) : value.toStringAsFixed(1)} MB';
 }
 
 /// Downloads a reciter's surahs into the app's own storage, one at a time.
@@ -168,6 +185,18 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
   final Set<String> _done = {};
   final Set<String> _stopPacks = {};
   String? _rootPath;
+  HttpClient? _client;
+
+  /// One client for every request, so a pack does not open a fresh connection
+  /// for each of its hundreds of files.
+  HttpClient get _http =>
+      _client ??= HttpClient()..connectionTimeout = const Duration(seconds: 20);
+
+  @override
+  void dispose() {
+    _client?.close(force: true);
+    super.dispose();
+  }
 
   Future<void> _restore() async {
     try {
@@ -231,15 +260,39 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
     return '$root/$reciterId/$surah';
   }
 
+  static bool _same(DownloadTask? a, DownloadTask b) =>
+      a != null &&
+      a.phase == b.phase &&
+      a.detail == b.detail &&
+      (a.progress - b.progress).abs() < 0.005;
+
   void _set(String key, DownloadTask task) {
-    final previous = state[key];
-    if (previous != null &&
-        previous.phase == task.phase &&
-        previous.detail == task.detail &&
-        (previous.progress - task.progress).abs() < 0.01) {
-      return;
+    final next = {...state};
+    var changed = false;
+    if (!_same(state[key], task)) {
+      next[key] = task;
+      changed = true;
     }
-    state = {...state, key: task};
+    final parts = key.split('/');
+    final surah = parts.length == 2 ? int.tryParse(parts[1]) : null;
+    if (surah != null) {
+      final packKey = '${parts[0]}/all';
+      final pack = state[packKey];
+      if (pack != null && pack.busy) {
+        final relayed = DownloadTask(
+          phase: DownloadPhase.downloading,
+          progress: (surah - 1 + task.progress.clamp(0.0, 1.0)) / 114,
+          detail: 'Surah $surah of 114 · ${task.detail ?? 'saving'}',
+          bytes: task.bytes,
+          totalBytes: task.totalBytes,
+        );
+        if (!_same(pack, relayed)) {
+          next[packKey] = relayed;
+          changed = true;
+        }
+      }
+    }
+    if (changed) state = next;
   }
 
   void _remove(String key) {
@@ -296,12 +349,18 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
         url,
         temp,
         onProgress:
-            (fraction) => _set(
+            (received, total) => _set(
               key,
               DownloadTask(
                 phase: DownloadPhase.downloading,
-                progress: fraction * 0.9,
-                detail: '${(fraction * 100).round()}%',
+                progress: total > 0 ? received / total * 0.9 : 0,
+                detail:
+                    total > 0
+                        ? '${(received * 100 / total).round()}% · '
+                            '${_mb(received)} of ${_mb(total)}'
+                        : _mb(received),
+                bytes: received,
+                totalBytes: total > 0 ? total : 0,
               ),
             ),
       );
@@ -337,87 +396,105 @@ class AudioDownloads extends StateNotifier<Map<String, DownloadTask>> {
     String key,
   ) async {
     final count = surahAyahCounts[surah - 1];
+    final pending = <int>[];
     var done = 0;
+    var bytes = 0;
     for (var ayah = 1; ayah <= count; ayah++) {
       final target = File(localAyahPath(dir.path, surah, ayah));
-      if (await target.exists() && await target.length() > 1024) {
-        done++;
-        continue;
+      if (await target.exists()) {
+        final length = await target.length();
+        if (length > 1024) {
+          done++;
+          bytes += length;
+          continue;
+        }
       }
-      final part = File('${target.path}.part');
-      await _fetch(
-        ayahAudioUrl(reciter, surah, ayah),
-        part,
-        onProgress:
-            (fraction) => _set(
-              key,
-              DownloadTask(
-                phase: DownloadPhase.downloading,
-                progress: (done + fraction) / count,
-                detail: 'Ayah $done of $count',
-              ),
-            ),
-      );
-      await part.rename(target.path);
-      done++;
+      pending.add(ayah);
+    }
+    final inFlight = <int, int>{};
+    void report() {
+      final live = bytes + inFlight.values.fold<int>(0, (a, b) => a + b);
       _set(
         key,
         DownloadTask(
           phase: DownloadPhase.downloading,
           progress: done / count,
-          detail: 'Ayah $done of $count',
+          detail:
+              '$done/$count · ${(done * 100 / count).round()}% · ${_mb(live)}',
+          bytes: live,
         ),
       );
     }
+
+    report();
+    var next = 0;
+    Future<void> worker() async {
+      while (true) {
+        if (next >= pending.length) return;
+        final ayah = pending[next++];
+        final target = File(localAyahPath(dir.path, surah, ayah));
+        final part = File('${target.path}.part');
+        try {
+          await _fetch(
+            ayahAudioUrl(reciter, surah, ayah),
+            part,
+            onProgress: (received, _) {
+              inFlight[ayah] = received;
+              report();
+            },
+          );
+        } finally {
+          inFlight.remove(ayah);
+        }
+        await part.rename(target.path);
+        done++;
+        bytes += await target.length();
+        report();
+      }
+    }
+
+    // Three files at a time: enough to keep the line busy without hammering
+    // the server or memory.
+    await Future.wait([for (var w = 0; w < 3; w++) worker()]);
   }
 
   Future<int?> _remoteSize(String url) async {
-    final client =
-        HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await client.headUrl(Uri.parse(url));
+      final request = await _http.headUrl(Uri.parse(url));
       final response = await request.close();
       await response.drain<void>();
       if (response.statusCode != HttpStatus.ok) return null;
       return response.contentLength >= 0 ? response.contentLength : null;
     } catch (_) {
       return null;
-    } finally {
-      client.close(force: true);
     }
   }
 
   Future<void> _fetch(
     String url,
     File target, {
-    void Function(double fraction)? onProgress,
+    void Function(int received, int total)? onProgress,
   }) async {
-    final client =
-        HttpClient()..connectionTimeout = const Duration(seconds: 20);
+    final request = await _http.getUrl(Uri.parse(url));
+    final response = await request.close();
+    if (response.statusCode != HttpStatus.ok) {
+      await response.drain<void>();
+      throw HttpException('HTTP ${response.statusCode}');
+    }
+    final total = response.contentLength;
+    final sink = target.openWrite();
+    var received = 0;
     try {
-      final request = await client.getUrl(Uri.parse(url));
-      final response = await request.close();
-      if (response.statusCode != HttpStatus.ok) {
-        await response.drain<void>();
-        throw HttpException('HTTP ${response.statusCode}');
-      }
-      final total = response.contentLength;
-      final sink = target.openWrite();
-      var received = 0;
-      try {
-        await for (final chunk in response) {
-          sink.add(chunk);
-          received += chunk.length;
-          if (onProgress != null && total > 0) {
-            onProgress(received / total);
-          }
+      await for (final chunk in response) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (onProgress != null) {
+          onProgress(received, total > 0 ? total : -1);
         }
-        await sink.flush();
-      } finally {
-        await sink.close();
       }
+      await sink.flush();
     } finally {
-      client.close(force: true);
+      await sink.close();
     }
   }
 

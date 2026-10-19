@@ -2,7 +2,7 @@ name: alim
 description: "Alim — your deen and your day, together. Qur'an, sahih hadith, stories, daily worship and work in one place."
 publish_to: 'none'
 
-version: 1.4.0+9
+version: 1.4.1+10
 
 environment:
   sdk: ^3.7.2
@@ -30,6 +30,9 @@ dependencies:
 
   # Sharing verses
   share_plus: ^10.1.4
+
+  # The installed version, shown in Me instead of a hardcoded string
+  package_info_plus: ^9.0.1
 
   # Place and prayer
   geolocator: ^14.0.2

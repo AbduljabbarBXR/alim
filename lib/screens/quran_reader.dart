@@ -27,10 +27,12 @@ class QuranReaderScreen extends ConsumerStatefulWidget {
 }
 
 class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
-  final ItemScrollController _scroll = ItemScrollController();
+  late final PageController _pages = PageController(
+    initialPage: widget.surah - 1,
+  );
+  late int _current = widget.surah;
   bool _translation = true;
-  bool _announced = false;
-  int? _lastTapped;
+  final Map<int, int> _tapped = {};
 
   @override
   void initState() {
@@ -39,62 +41,32 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
   }
 
   @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider);
-    final view = ref.watch(surahViewProvider(widget.surah));
+    final view = ref.watch(surahViewProvider(_current));
     final audio = ref.watch(audioProvider);
     final reciter = ref.watch(activeReciterProvider);
     final downloads = ref.watch(audioDownloadsProvider);
     final downloadManager = ref.watch(audioDownloadsProvider.notifier);
-    final downloaded = downloadManager.isSurahDownloaded(
-      reciter.id,
-      widget.surah,
-    );
-    final downloadTask = downloads['${reciter.id}/${widget.surah}'];
-    final playingHere = audio.surah == widget.surah ? audio.ayah : null;
-    ref.listen<AudioView>(audioProvider, (previous, next) {
-      if (next.surah != widget.surah || next.ayah == null) return;
-      if (next.ayah == previous?.ayah) return;
-      final loaded = view.valueOrNull;
-      if (loaded == null || !_scroll.isAttached) return;
-      final index = loaded.ayat.indexWhere((a) => a.number == next.ayah);
-      if (index < 0) return;
-      final header =
-          loaded.surah.number == 1 || loaded.surah.number == 9 ? 1 : 2;
-      _scroll.scrollTo(
-        index: index + header,
-        duration: const Duration(milliseconds: 350),
-        alignment: 0.25,
-      );
-    });
-    final read = ref.watch(readSetProvider).valueOrNull ?? const <String>{};
-    final surah = view.valueOrNull?.surah;
-    final lastRead = ref.watch(lastReadProvider).valueOrNull;
-    final bookmarkedAyat =
-        ref
-            .watch(bookmarksProvider('ayah'))
-            .valueOrNull
-            ?.map((b) => b.ref)
-            .toSet() ??
-        const <int>{};
+    final downloaded = downloadManager.isSurahDownloaded(reciter.id, _current);
+    final downloadTask = downloads['${reciter.id}/$_current'];
+    final playingHere = audio.surah == _current ? audio.ayah : null;
+    final marker =
+        playingHere ??
+        _tapped[_current] ??
+        (_current == widget.surah ? widget.focusAyah : null);
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(surah?.name ?? ''),
-            if (surah != null)
-              Text(
-                '${surah.meaning} · ${surah.revelation}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: AlimColors.mutedOf(context),
-                ),
-              ),
-          ],
-        ),
+        // The surah introduces itself once, in the page banner below; the
+        // toolbar stays quiet.
+        title: const SizedBox.shrink(),
         actions: [
           IconButton(
             tooltip: _translation ? 'Hide translation' : 'Show translation',
@@ -111,21 +83,21 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
             downloaded: downloaded,
             task: downloadTask,
             audio: audio,
-            surahNumber: widget.surah,
+            surahNumber: _current,
             surahFirstAyah: view.valueOrNull?.surah.firstAyah ?? 1,
             surahAyahCount: view.valueOrNull?.surah.ayat ?? 0,
-            markerAyah: playingHere ?? _lastTapped ?? widget.focusAyah,
+            markerAyah: marker,
             downloadBeforePlay: profile.downloadBeforePlay,
             onPlay:
                 view.valueOrNull == null
                     ? null
                     : () => _playPressed(view.value!, reciter, audio),
             onPrevious:
-                audio.surah == widget.surah
+                audio.surah == _current
                     ? () => ref.read(audioProvider.notifier).previous()
                     : null,
             onNext:
-                audio.surah == widget.surah
+                audio.surah == _current
                     ? () => ref.read(audioProvider.notifier).next()
                     : null,
             onChange: () => showReciterPicker(context, ref),
@@ -136,44 +108,30 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
           ),
         ),
       ),
-      body: switch (view) {
-        AsyncData(:final value) => GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onHorizontalDragEnd:
-              (details) => _swipeSurah(value.surah.number, details),
-          child: _reader(
-            context,
-            value,
-            profile.arabicScale,
-            read,
-            lastRead,
-            bookmarkedAyat,
-            playingHere,
-          ),
-        ),
-        AsyncError(:final error) => Center(child: Text('$error')),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
-    );
-  }
-
-  void _swipeSurah(int current, DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity.abs() < 250) return;
-    final target = velocity < 0 ? current + 1 : current - 1;
-    if (target < 1 || target > 114) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            target < 1 ? 'This is the first surah.' : 'This is the last surah.',
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => QuranReaderScreen(surah: target)),
+      // Swiping runs through the surahs, the page following the finger so it
+      // feels like turning, not jumping.
+      body: PageView.builder(
+        controller: _pages,
+        itemCount: 114,
+        onPageChanged: (page) {
+          setState(() => _current = page + 1);
+          if (page + 2 <= 114) ref.read(surahViewProvider(page + 2));
+        },
+        itemBuilder: (context, index) {
+          final surah = index + 1;
+          return _SurahBody(
+            key: ValueKey(surah),
+            surah: surah,
+            scale: profile.arabicScale,
+            translation: _translation,
+            focusAyah: surah == widget.surah ? widget.focusAyah : null,
+            onTapped: (ayah) {
+              if (_tapped[surah] == ayah) return;
+              setState(() => _tapped[surah] = ayah);
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -203,7 +161,9 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
           surahName: view.surah.name,
           ayat: view.ayat,
           reciter: reciter,
-          startAyah: _lastTapped ?? widget.focusAyah,
+          startAyah:
+              _tapped[view.surah.number] ??
+              (view.surah.number == widget.surah ? widget.focusAyah : null),
           localDir: directory,
         );
   }
@@ -263,12 +223,80 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
       context,
     ).showSnackBar(const SnackBar(content: Text('Download removed.')));
   }
+}
 
-  Widget _reader(
+/// One surah's page inside the swipeable reader. It owns its scroll position
+/// and its watchers, so neighbouring pages stay warm.
+class _SurahBody extends ConsumerStatefulWidget {
+  const _SurahBody({
+    super.key,
+    required this.surah,
+    required this.scale,
+    required this.translation,
+    required this.onTapped,
+    this.focusAyah,
+  });
+
+  final int surah;
+  final double scale;
+  final bool translation;
+  final ValueChanged<int> onTapped;
+  final int? focusAyah;
+
+  @override
+  ConsumerState<_SurahBody> createState() => _SurahBodyState();
+}
+
+class _SurahBodyState extends ConsumerState<_SurahBody> {
+  final ItemScrollController _scroll = ItemScrollController();
+  bool _announced = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final view = ref.watch(surahViewProvider(widget.surah));
+    final lastRead = ref.watch(lastReadProvider).valueOrNull;
+    final bookmarkedAyat =
+        ref
+            .watch(bookmarksProvider('ayah'))
+            .valueOrNull
+            ?.map((b) => b.ref)
+            .toSet() ??
+        const <int>{};
+    final audio = ref.watch(audioProvider);
+    final playingHere = audio.surah == widget.surah ? audio.ayah : null;
+
+    ref.listen<AudioView>(audioProvider, (previous, next) {
+      if (next.surah != widget.surah || next.ayah == null) return;
+      if (next.ayah == previous?.ayah) return;
+      final loaded = view.valueOrNull;
+      if (loaded == null || !_scroll.isAttached) return;
+      final index = loaded.ayat.indexWhere((a) => a.number == next.ayah);
+      if (index < 0) return;
+      final header =
+          loaded.surah.number == 1 || loaded.surah.number == 9 ? 1 : 2;
+      _scroll.scrollTo(
+        index: index + header,
+        duration: const Duration(milliseconds: 350),
+        alignment: 0.25,
+      );
+    });
+
+    return switch (view) {
+      AsyncData(:final value) => _list(
+        context,
+        value,
+        lastRead,
+        bookmarkedAyat,
+        playingHere,
+      ),
+      AsyncError(:final error) => Center(child: Text('$error')),
+      _ => const SizedBox.shrink(),
+    };
+  }
+
+  Widget _list(
     BuildContext context,
     SurahView view,
-    double scale,
-    Set<String> read,
     int? lastRead,
     Set<int> bookmarkedAyat,
     int? playingAyah,
@@ -305,42 +333,49 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
       initialScrollIndex:
           focusIndex == null || focusIndex <= 0 ? 0 : focusIndex + headerCount,
       initialAlignment: 0.02,
-      padding: const EdgeInsets.fromLTRB(
-        AlimSpace.lg,
-        AlimSpace.sm,
-        AlimSpace.lg,
-        AlimSpace.xxl * 2,
+      padding: const EdgeInsets.only(
+        top: AlimSpace.sm,
+        bottom: AlimSpace.xxl * 2,
       ),
       itemCount: view.ayat.length + headerCount,
       itemBuilder: (context, i) {
         if (i == 0) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: AlimSpace.sm),
+            padding: const EdgeInsets.fromLTRB(
+              AlimSpace.lg,
+              0,
+              AlimSpace.lg,
+              AlimSpace.sm,
+            ),
             child: _surahHeader(context, view.surah),
           );
         }
         if (showBismillah && i == 1) {
           return const Padding(
-            padding: EdgeInsets.only(bottom: AlimSpace.sm),
+            padding: EdgeInsets.fromLTRB(
+              AlimSpace.lg,
+              0,
+              AlimSpace.lg,
+              AlimSpace.sm,
+            ),
             child: BismillahBand(),
           );
         }
         final ayah = view.ayat[i - headerCount];
-        final isRead = read.contains('${ayah.surah}:${ayah.ayah}');
         final focused = widget.focusAyah == ayah.number;
         return _AyahTile(
           key: ValueKey(ayah.number),
           ayah: ayah,
           surahName: view.surah.name,
-          scale: scale,
-          translation: _translation,
-          isRead: isRead,
+          scale: widget.scale,
+          translation: widget.translation,
+          alternate: (i - headerCount).isOdd,
           isLastRead: lastRead == ayah.number,
           bookmarked: bookmarkedAyat.contains(ayah.number),
           focused: focused,
           playing: playingAyah == ayah.number,
           onTap: () async {
-            setState(() => _lastTapped = ayah.number);
+            widget.onTapped(ayah.number);
             final milestone = await ref
                 .read(actionsProvider)
                 .markAyahRead(surah: ayah.surah, ayah: ayah.ayah);
@@ -399,6 +434,8 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
   }
 }
 
+/// One ayah in the long merged band: no card of its own, just a stripe that
+/// alternates its shade so the eye can hold its place.
 class _AyahTile extends StatelessWidget {
   const _AyahTile({
     super.key,
@@ -406,7 +443,7 @@ class _AyahTile extends StatelessWidget {
     required this.surahName,
     required this.scale,
     required this.translation,
-    required this.isRead,
+    required this.alternate,
     required this.isLastRead,
     required this.bookmarked,
     required this.focused,
@@ -418,7 +455,7 @@ class _AyahTile extends StatelessWidget {
   final String surahName;
   final double scale;
   final bool translation;
-  final bool isRead;
+  final bool alternate;
   final bool isLastRead;
   final bool bookmarked;
   final bool focused;
@@ -434,88 +471,74 @@ class _AyahTile extends StatelessWidget {
             : focused
             ? AlimColors.goldSoft.withValues(alpha: dark ? 0.10 : 0.6)
             : null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AlimSpace.sm),
-      child: AlimCard(
-        color: highlight,
+    final zebra =
+        alternate
+            ? (dark
+                ? Colors.white.withValues(alpha: 0.035)
+                : Colors.black.withValues(alpha: 0.028))
+            : Colors.transparent;
+    return Material(
+      color: highlight ?? zebra,
+      child: InkWell(
         onTap: onTap,
-        padding: const EdgeInsets.fromLTRB(
-          AlimSpace.md,
-          AlimSpace.md,
-          AlimSpace.md,
-          AlimSpace.sm,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    ayah.textAr,
-                    textAlign: TextAlign.right,
-                    textDirection: TextDirection.rtl,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AlimSpace.lg,
+            AlimSpace.md,
+            AlimSpace.lg,
+            AlimSpace.sm,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                ayah.textAr,
+                textAlign: TextAlign.right,
+                textDirection: TextDirection.rtl,
+                style: TextStyle(
+                  fontFamily: quranFamily,
+                  fontSize: 24 * scale,
+                  height: 1.9,
+                ),
+              ),
+              if (translation) ...[
+                const SizedBox(height: AlimSpace.xs),
+                Text(
+                  ayah.textEn,
+                  style: const TextStyle(height: 1.6, fontSize: 14.5),
+                ),
+              ],
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(
+                    '$surahName ${ayah.surah}:${ayah.ayah}',
                     style: TextStyle(
-                      fontFamily: quranFamily,
-                      fontSize: 24 * scale,
-                      height: 1.9,
+                      color: AlimColors.mutedOf(context),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-                const SizedBox(width: AlimSpace.xs),
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child:
-                      isRead
-                          ? Icon(
-                            Icons.check_circle,
-                            size: 21,
-                            color: Theme.of(context).colorScheme.primary,
-                          )
-                          : Icon(
-                            Icons.circle_outlined,
-                            size: 21,
-                            color: AlimColors.mutedOf(
-                              context,
-                            ).withValues(alpha: 0.55),
-                          ),
-                ),
-              ],
-            ),
-            if (translation) ...[
-              const SizedBox(height: AlimSpace.xs),
-              Text(
-                ayah.textEn,
-                style: const TextStyle(height: 1.6, fontSize: 14.5),
+                  if (bookmarked) ...[
+                    const SizedBox(width: AlimSpace.xs),
+                    const Icon(
+                      Icons.bookmark,
+                      size: 14,
+                      color: AlimColors.gold,
+                    ),
+                  ],
+                  if (isLastRead) ...[
+                    const SizedBox(width: AlimSpace.xs),
+                    const AlimPill(label: 'Your place', color: AlimColors.gold),
+                  ],
+                  if (ayah.sajda) ...[
+                    const SizedBox(width: AlimSpace.xs),
+                    const AlimPill(label: 'Sajda', color: AlimColors.rose),
+                  ],
+                ],
               ),
             ],
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Text(
-                  '$surahName ${ayah.surah}:${ayah.ayah}',
-                  style: TextStyle(
-                    color: AlimColors.mutedOf(context),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (bookmarked) ...[
-                  const SizedBox(width: AlimSpace.xs),
-                  const Icon(Icons.bookmark, size: 14, color: AlimColors.gold),
-                ],
-                if (isLastRead) ...[
-                  const SizedBox(width: AlimSpace.xs),
-                  const AlimPill(label: 'Your place', color: AlimColors.gold),
-                ],
-                if (ayah.sajda) ...[
-                  const SizedBox(width: AlimSpace.xs),
-                  const AlimPill(label: 'Sajda', color: AlimColors.rose),
-                ],
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

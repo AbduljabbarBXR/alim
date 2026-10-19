@@ -58,22 +58,25 @@ suggestion when it fits.
       );
       request.headers.contentType = ContentType.json;
       request.headers.set('Authorization', 'Bearer $companionApiKey');
-      request.write(jsonEncode({
-        'model': companionModel,
-        'temperature': 0.4,
-        'max_tokens': 500,
-        'messages': [
-          {
-            'role': 'system',
-            'content': context.isEmpty
-                ? _system
-                : '$_system\n\nContext from the reader\'s library:\n$context',
-          },
-          for (final m in history.take(12))
-            {'role': m.fromUser ? 'user' : 'assistant', 'content': m.text},
-          {'role': 'user', 'content': question},
-        ],
-      }));
+      request.write(
+        jsonEncode({
+          'model': companionModel,
+          'temperature': 0.4,
+          'max_tokens': 500,
+          'messages': [
+            {
+              'role': 'system',
+              'content':
+                  context.isEmpty
+                      ? _system
+                      : '$_system\n\nContext from the reader\'s library:\n$context',
+            },
+            for (final m in history.take(12))
+              {'role': m.fromUser ? 'user' : 'assistant', 'content': m.text},
+            {'role': 'user', 'content': question},
+          ],
+        }),
+      );
       final response = await request.close();
       final body = await response.transform(utf8.decoder).join();
       if (response.statusCode != HttpStatus.ok) {
@@ -105,9 +108,7 @@ suggestion when it fits.
     final hadith = await _store.searchHadith(q, limit: 3);
     final lines = <String>[];
     for (final a in ayat) {
-      lines.add(
-        'Qur\'an ${a.surah}:${a.ayah}: ${a.textEn}',
-      );
+      lines.add('Qur\'an ${a.surah}:${a.ayah}: ${a.textEn}');
     }
     for (final h in hadith) {
       lines.add(
@@ -118,10 +119,10 @@ suggestion when it fits.
   }
 
   String _collectionName(String id) => switch (id) {
-        'bukhari' => 'Sahih al-Bukhari',
-        'muslim' => 'Sahih Muslim',
-        'nawawi' => 'Forty Hadith of an-Nawawi',
-        'qudsi' => 'Forty Hadith Qudsi',
-        _ => id,
-      };
+    'bukhari' => 'Sahih al-Bukhari',
+    'muslim' => 'Sahih Muslim',
+    'nawawi' => 'Forty Hadith of an-Nawawi',
+    'qudsi' => 'Forty Hadith Qudsi',
+    _ => id,
+  };
 }
