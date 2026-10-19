@@ -50,17 +50,17 @@ class AlimCard extends StatelessWidget {
               ),
             ),
           ),
-          if (onTap == null)
-            content
-          else
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: radius,
-                onTap: onTap,
-                child: content,
-              ),
-            ),
+          Material(
+            color: Colors.transparent,
+            child:
+                onTap == null
+                    ? content
+                    : InkWell(
+                      borderRadius: radius,
+                      onTap: onTap,
+                      child: content,
+                    ),
+          ),
         ],
       ),
     );
