@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import 'data/store.dart';
 import 'screens/onboarding.dart';
@@ -11,8 +13,23 @@ import 'state.dart';
 import 'theme.dart';
 import 'widgets/backdrop.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS)) {
+    try {
+      await JustAudioBackground.init(
+        androidNotificationChannelId: 'com.alim.app.audio',
+        androidNotificationChannelName: 'Qur\'an playback',
+        androidNotificationChannelDescription:
+            'Ayah by ayah, from the reciter you chose',
+        androidNotificationOngoing: true,
+      );
+    } catch (_) {
+      // Playback stays in the app; nothing about boot depends on this.
+    }
+  }
   runApp(const BootRoot());
 }
 

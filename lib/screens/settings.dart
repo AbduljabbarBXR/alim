@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
+import '../services/audio.dart';
 import '../services/companion.dart';
 import '../services/notifications.dart';
 import '../state.dart';
@@ -84,6 +85,79 @@ Future<void> _pickTranslation(
                   ),
                   child: Text(
                     'Translations via Tanzil.net, kept verbatim.',
+                    style: TextStyle(
+                      color: AlimColors.mutedOf(sheetContext),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+  );
+}
+
+Future<void> _pickReciter(
+  BuildContext context,
+  WidgetRef ref,
+  Profile profile,
+) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder:
+        (sheetContext) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: AlimSpace.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AlimSpace.lg,
+                    0,
+                    AlimSpace.lg,
+                    AlimSpace.xs,
+                  ),
+                  child: Text(
+                    'Reciter',
+                    style: Theme.of(sheetContext).textTheme.titleMedium,
+                  ),
+                ),
+                for (final r in reciters)
+                  ListTile(
+                    leading: Icon(
+                      r.id == profile.reciter
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      color:
+                          r.id == profile.reciter
+                              ? AlimColors.gold
+                              : AlimColors.mutedOf(sheetContext),
+                    ),
+                    title: Text(r.name),
+                    subtitle: const Text('64 kbps'),
+                    onTap: () async {
+                      await ref
+                          .read(actionsProvider)
+                          .saveProfile(profile.copyWith(reciter: r.id));
+                      if (sheetContext.mounted) {
+                        Navigator.of(sheetContext).pop();
+                      }
+                    },
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AlimSpace.lg,
+                    AlimSpace.xs,
+                    AlimSpace.lg,
+                    0,
+                  ),
+                  child: Text(
+                    'Recordings from everyayah.com.',
                     style: TextStyle(
                       color: AlimColors.mutedOf(sheetContext),
                       fontSize: 12.5,
@@ -194,6 +268,30 @@ class SettingsScreen extends ConsumerWidget {
                         (v) => actions.saveProfile(
                           profile.copyWith(arabicScale: v),
                         ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SectionHeader('Listening'),
+          AlimCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.headphones_outlined),
+                  title: const Text('Reciter'),
+                  subtitle: Text(reciterById(profile.reciter).name),
+                  trailing: const Icon(Icons.chevron_right, size: 19),
+                  onTap: () => _pickReciter(context, ref, profile),
+                ),
+                const Divider(height: 1),
+                const ListTile(
+                  leading: Icon(Icons.wifi_outlined),
+                  title: Text('Streaming audio'),
+                  subtitle: Text(
+                    'Ayah by ayah, 64 kbps, played from everyayah.com. '
+                    'Needs a connection.',
                   ),
                 ),
               ],
@@ -360,6 +458,8 @@ class SettingsScreen extends ConsumerWidget {
                   'Stories: forty-six tellings written for Alim, each '
                       'anchored to an ayah, and where possible to the '
                       'hadith that carries it.',
+                  'Audio: ayah by ayah at 64 kbps from everyayah.com. '
+                      'Streamed as you listen, never saved to the phone.',
                 ])
                   Padding(
                     padding: const EdgeInsets.only(bottom: AlimSpace.sm),

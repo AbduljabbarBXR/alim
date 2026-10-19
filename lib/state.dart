@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/store.dart';
+import 'services/audio.dart';
 import 'models.dart';
 import 'services/daily.dart';
 import 'services/location.dart';
@@ -59,6 +60,7 @@ class ProfileNotifier extends StateNotifier<Profile> {
         translation: m['translation'] as String? ?? 'sahih',
         arabicScale: (m['arabicScale'] as num?)?.toDouble() ?? 1.0,
         darkMode: m['darkMode'] as bool? ?? false,
+        reciter: m['reciter'] as String? ?? 'alafasy',
         reminderHour: m['reminderHour'] as int? ?? 20,
         reminderMinute: m['reminderMinute'] as int? ?? 0,
         reminderOn: m['reminderOn'] as bool? ?? false,
@@ -102,6 +104,16 @@ final profileProvider = StateNotifierProvider<ProfileNotifier, Profile>((ref) {
 final activeTranslationProvider = Provider<String>(
   (ref) => ref.watch(profileProvider).translation,
 );
+
+/// The reciter behind the reader's play buttons.
+final activeReciterProvider = Provider<Reciter>(
+  (ref) => reciterById(ref.watch(profileProvider).reciter),
+);
+
+/// The one player, alive while anything is playing.
+final audioProvider = StateNotifierProvider<AyahAudio, AudioView>((ref) {
+  return AyahAudio();
+});
 
 // ---------------------------------------------------------------- content
 

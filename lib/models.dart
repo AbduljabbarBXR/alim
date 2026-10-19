@@ -330,6 +330,7 @@ class Profile {
     this.translation = 'sahih',
     this.arabicScale = 1.0,
     this.darkMode = false,
+    this.reciter = 'alafasy',
     this.reminderHour = 20,
     this.reminderMinute = 0,
     this.reminderOn = false,
@@ -343,6 +344,7 @@ class Profile {
   final String translation;
   final double arabicScale;
   final bool darkMode;
+  final String reciter;
   final int reminderHour;
   final int reminderMinute;
   final bool reminderOn;
@@ -356,6 +358,7 @@ class Profile {
     String? translation,
     double? arabicScale,
     bool? darkMode,
+    String? reciter,
     int? reminderHour,
     int? reminderMinute,
     bool? reminderOn,
