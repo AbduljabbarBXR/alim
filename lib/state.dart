@@ -168,6 +168,16 @@ final hadithByIdProvider = FutureProvider.family<Hadith, int>((ref, id) {
   return ref.watch(storeProvider).hadithById(id);
 });
 
+final hadithSearchProvider =
+    FutureProvider.family<List<Hadith>, String>((ref, query) {
+  return ref.watch(storeProvider).searchHadith(query, limit: 60);
+});
+
+final hadithBookSearchProvider =
+    FutureProvider.family<List<HadithBook>, String>((ref, query) {
+  return ref.watch(storeProvider).searchHadithBooks(query);
+});
+
 final shortHadithCountProvider = FutureProvider<int>((ref) {
   return ref.watch(storeProvider).shortHadithCount();
 });

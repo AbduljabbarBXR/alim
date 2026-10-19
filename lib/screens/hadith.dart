@@ -14,7 +14,10 @@ class HadithHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final collections = ref.watch(hadithCollectionsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Hadith')),
+      appBar: AppBar(
+        title: const Text('Hadith'),
+        actions: const [_HadithSearchAction()],
+      ),
       body: switch (collections) {
         AsyncData(:final value) => ListView(
             padding: const EdgeInsets.fromLTRB(
@@ -135,6 +138,7 @@ class HadithBookScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(collection.name),
+        actions: const [_HadithSearchAction()],
       ),
       body: switch (books) {
         AsyncData(:final value) => ListView.separated(
@@ -238,6 +242,7 @@ class HadithListScreen extends ConsumerWidget {
                 ],
               )
             : Text(collection.name),
+        actions: const [_HadithSearchAction()],
       ),
       body: switch (page) {
         AsyncData(:final value) => ListView.separated(
@@ -413,6 +418,244 @@ class HadithDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HadithSearchAction extends StatelessWidget {
+  const _HadithSearchAction();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Search the hadith',
+      icon: const Icon(Icons.search),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const HadithSearchScreen()),
+      ),
+    );
+  }
+}
+
+/// Searches the chapter titles and the hadith text, in English or in Arabic.
+/// Two letters are enough; the results narrow as the word grows.
+class HadithSearchScreen extends ConsumerStatefulWidget {
+  const HadithSearchScreen({super.key});
+
+  @override
+  ConsumerState<HadithSearchScreen> createState() => _HadithSearchScreenState();
+}
+
+class _HadithSearchScreenState extends ConsumerState<HadithSearchScreen> {
+  final _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim();
+    final active = query.length >= 2;
+    final collections = ref.watch(hadithCollectionsProvider).valueOrNull ??
+        const <HadithCollection>[];
+    final byId = {for (final c in collections) c.id: c};
+
+    return Scaffold(
+      appBar: AppBar(
+        title: TextField(
+          controller: _controller,
+          autofocus: true,
+          textInputAction: TextInputAction.search,
+          decoration: const InputDecoration(
+            hintText: 'Search hadith in English or Arabic',
+            border: InputBorder.none,
+          ),
+          onChanged: (value) => setState(() => _query = value),
+        ),
+        actions: [
+          if (_query.isNotEmpty)
+            IconButton(
+              tooltip: 'Clear',
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                _controller.clear();
+                setState(() => _query = '');
+              },
+            ),
+        ],
+      ),
+      body: !active
+          ? const Padding(
+              padding: EdgeInsets.all(AlimSpace.lg),
+              child: EmptyNote(
+                text: 'Type at least two letters. Try prayer, patience, '
+                    'or mercy.',
+                icon: Icons.search,
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AlimSpace.lg,
+                0,
+                AlimSpace.lg,
+                AlimSpace.xxl,
+              ),
+              children: [
+                ..._books(query, byId),
+                ..._hadiths(query, byId),
+              ],
+            ),
+    );
+  }
+
+  List<Widget> _books(String query, Map<String, HadithCollection> byId) {
+    final books = ref.watch(hadithBookSearchProvider(query));
+    return books.when(
+      data: (value) {
+        if (value.isEmpty) return const <Widget>[];
+        return [
+          const SectionHeader('Chapters'),
+          for (final b in value)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AlimSpace.xs),
+              child: AlimCard(
+                onTap: () {
+                  final collection = byId[b.collection];
+                  if (collection == null) return;
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => HadithListScreen(
+                        collection: collection,
+                        book: b,
+                      ),
+                    ),
+                  );
+                },
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AlimSpace.md,
+                  vertical: AlimSpace.sm,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            b.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${byId[b.collection]?.name ?? b.collection} · '
+                            'book ${b.number}',
+                            style: TextStyle(
+                              color: AlimColors.mutedOf(context),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '${b.count}',
+                      style: TextStyle(
+                        color: AlimColors.mutedOf(context),
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right, size: 18),
+                  ],
+                ),
+              ),
+            ),
+        ];
+      },
+      error: (error, _) => [Center(child: Text('$error'))],
+      loading: () => const <Widget>[],
+    );
+  }
+
+  List<Widget> _hadiths(String query, Map<String, HadithCollection> byId) {
+    final results = ref.watch(hadithSearchProvider(query));
+    final learnedToday =
+        ref.watch(hadithReadSetProvider).valueOrNull ?? const <int>{};
+    return results.when(
+      data: (value) {
+        if (value.isEmpty) {
+          return const [
+            SectionHeader('Hadith'),
+            Padding(
+              padding: EdgeInsets.all(AlimSpace.lg),
+              child: EmptyNote(
+                text: 'No hadith found for that word. Try a shorter one.',
+                icon: Icons.search_off,
+              ),
+            ),
+          ];
+        }
+        return [
+          const SectionHeader('Hadith'),
+          for (final h in value)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AlimSpace.sm),
+              child: AlimCard(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => HadithDetailScreen(hadith: h),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      h.textEn,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(height: 1.5, fontSize: 13.5),
+                    ),
+                    const SizedBox(height: AlimSpace.xs),
+                    Row(
+                      children: [
+                        Text(
+                          '${byId[h.collection]?.name ?? h.collection} '
+                          'no. ${h.numberInBook}',
+                          style: TextStyle(
+                            color: AlimColors.mutedOf(context),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (learnedToday.contains(h.id))
+                          Icon(
+                            Icons.check_circle,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ];
+      },
+      error: (error, _) => [Center(child: Text('$error'))],
+      loading: () => const [
+        Padding(
+          padding: EdgeInsets.all(AlimSpace.lg),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ],
     );
   }
 }

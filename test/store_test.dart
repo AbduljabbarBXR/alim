@@ -104,6 +104,26 @@ void main() {
     });
   });
 
+  group('searching the hadith', () {
+    test('a topic finds passages and chapters', () async {
+      final passages = await store.searchHadith('prayer', limit: 20);
+      expect(passages, isNotEmpty);
+      for (final h in passages.take(5)) {
+        expect(h.textEn.toLowerCase(), contains('prayer'));
+      }
+      final books = await store.searchHadithBooks('prayer');
+      expect(books, isNotEmpty);
+      for (final b in books) {
+        expect(b.title.toLowerCase(), contains('prayer'));
+      }
+    });
+
+    test('Arabic finds a passage without its diacritics', () async {
+      final passages = await store.searchHadith('الصلاة', limit: 5);
+      expect(passages, isNotEmpty);
+    });
+  });
+
   group('pages and juz', () {
     test('the mushaf has 604 pages', () async {
       expect(await store.pageCount(), 604);

@@ -262,6 +262,40 @@ class AlimStore {
         .toList();
   }
 
+  /// Chapters whose titles match the query, so a topic leads to a whole book
+  /// and not only to the passages that spell the word out.
+  Future<List<HadithBook>> searchHadithBooks(
+    String query, {
+    int limit = 30,
+  }) async {
+    final q = query.trim();
+    if (q.isEmpty) return const [];
+    final rows = await _db.rawQuery('''
+      SELECT b.number, b.collection, b.title,
+             (SELECT COUNT(*) FROM hadith h
+               WHERE h.collection = b.collection AND h.book = b.number
+                 AND TRIM(h.text_en) != '') AS count
+      FROM hadith_book b
+      WHERE b.title LIKE ?
+      ORDER BY CASE b.collection
+                 WHEN 'bukhari' THEN 0
+                 WHEN 'muslim' THEN 1
+                 WHEN 'nawawi' THEN 2
+                 WHEN 'qudsi' THEN 3
+                 ELSE 4
+               END, b.number
+      LIMIT ?
+    ''', ['%${q.toLowerCase()}%', limit]);
+    return rows
+        .map((m) => HadithBook(
+              number: m['number'] as int,
+              collection: m['collection'] as String,
+              title: m['title'] as String,
+              count: (m['count'] as int?) ?? 0,
+            ))
+        .toList();
+  }
+
   Future<HadithCollection> hadithCollection(String id) async {
     final rows = await _db.query('hadith_collection',
         where: 'id = ?', whereArgs: [id], limit: 1);
