@@ -21,7 +21,7 @@ class AlimStore {
 
   /// Bumped whenever the shipped content changes. An install older than this
   /// gets its content replaced while its own record is copied across.
-  static const contentVersion = 2;
+  static const contentVersion = 3;
 
   static const _userTables = [
     'user_kv',

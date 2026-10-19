@@ -61,7 +61,7 @@ const rotationTasks = <int, DailyTask>{
   5: DailyTask(
     id: 'rot-fri',
     title: 'Read Surah Al-Kahf',
-    subtitle: 'The Friday surah — light between the two Fridays.',
+    subtitle: 'The Friday surah, light between the two Fridays.',
     xp: 20,
     kind: DailyTaskKind.manual,
   ),

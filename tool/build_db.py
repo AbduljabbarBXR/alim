@@ -7,7 +7,7 @@ Sources (all public domain / open licence):
   * Surah metadata — fawazahmed0/quran-api info.json
   * Hadith        — fawazahmed0/hadith-api, Sahih al-Bukhari, Sahih Muslim,
                     Forty Hadith of an-Nawawi, Forty Hadith Qudsi (eng + ara)
-  * Stories       — authored for Alim (tool/stories.json)
+  * Stories       — authored for Alim (tool/stories_a.json ... stories_d.json)
 
 Run:  python3 tool/build_db.py
 """
@@ -44,6 +44,15 @@ def normalize_ar(text: str) -> str:
 
 def normalize_en(text: str) -> str:
     return text.lower()
+
+
+_LONG_DASH = re.compile(r"\s*[\u2014\u2013]\s*")
+
+
+def tidy_dashes(text: str, comma: str = ", ") -> str:
+    """The source translations mark asides with long dashes. The app reads
+    better without them, so a comma takes their place."""
+    return _LONG_DASH.sub(comma, text).strip()
 
 
 def load(name: str):
@@ -253,8 +262,8 @@ def main() -> None:
         for he, ha in zip(e["hadiths"], a["hadiths"]):
             ref = he.get("reference") or {}
             book = int(ref.get("book", 0) or 0)
-            text_en = he["text"].strip()
-            text_ar = ha["text"].strip()
+            text_en = tidy_dashes(he["text"].strip())
+            text_ar = tidy_dashes(ha["text"].strip(), "، ")
             # A handful of dataset rows carry no text in either language.
             # They render as blank cards, so they are dropped here.
             if not text_en or not text_ar:
@@ -272,6 +281,30 @@ def main() -> None:
                     1 if len(text_en) <= 650 else 0,
                 )
             )
+        # The collections repeat hadiths for chains and cross-references. A
+        # reading list should not show the same passage twice: drop chain-only
+        # pointer rows, then keep the first row of any repeated translation.
+        pointer_prefixes = (
+            "this hadith has been narrated",
+            "this hadith has been transmitted",
+            "a hadith like this",
+            "see translation for hadith",
+        )
+        seen = set()
+        kept = []
+        chain_only = repeated = 0
+        for row in rows:
+            low = row[3].lower()
+            if low.startswith(pointer_prefixes) and ":" not in row[3]:
+                chain_only += 1
+                continue
+            key = re.sub(r"[^a-z0-9]+", " ", low).strip()
+            if key in seen:
+                repeated += 1
+                continue
+            seen.add(key)
+            kept.append(row)
+        rows = kept
         c.executemany(
             "INSERT INTO hadith (collection, book, number_in_book, text_en, text_ar, en_search, ar_search, short) VALUES (?,?,?,?,?,?,?,?)",
             rows,
@@ -281,8 +314,11 @@ def main() -> None:
             (cid, name, ar_full, blurb, len(rows)),
         )
         hadith_total += len(rows)
-        if blank:
-            print(f"  {cid}: dropped {blank} blank rows")
+        if blank or chain_only or repeated:
+            print(
+                f"  {cid}: dropped {blank} blank, {chain_only} chain-only, "
+                f"{repeated} repeated rows"
+            )
 
     # --- Stories ---------------------------------------------------------
     ayah_lookup = {}
@@ -300,7 +336,10 @@ def main() -> None:
     for s in stories:
         ref = s["ayah"]
         number = ayah_lookup.get(ref) if ref else None
-        words = sum(len(p.split()) for p in s["body"])
+        title = tidy_dashes(s["title"])
+        lesson = tidy_dashes(s["lesson"])
+        body = [tidy_dashes(p) for p in s["body"]]
+        words = sum(len(p.split()) for p in body)
         story_total_words += words
 
         hid = href = None
@@ -336,10 +375,10 @@ def main() -> None:
             (
                 s["id"],
                 s["category"],
-                s["title"],
+                title,
                 s["minutes"],
-                "\n\n".join(s["body"]),
-                s["lesson"],
+                "\n\n".join(body),
+                lesson,
                 ref,
                 number,
                 words,
@@ -348,7 +387,7 @@ def main() -> None:
             ),
         )
 
-    c.execute("INSERT INTO meta VALUES ('db_version', '2')")
+    c.execute("INSERT INTO meta VALUES ('db_version', '3')")
     c.execute("INSERT INTO meta VALUES ('ayatod', '')")
     c.execute("INSERT INTO meta VALUES ('quran_source', 'Uthmani Hafs text, fawazahmed0/quran-api (public domain)')")
     c.execute("INSERT INTO meta VALUES ('quran_translation', 'Abdullah Yusuf Ali (1934, public domain)')")

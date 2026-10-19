@@ -44,7 +44,7 @@ class HadithHomeScreen extends ConsumerWidget {
                     const Expanded(
                       child: Text(
                         'Only the authentic. The two Sahihs, Imam an-Nawawi\'s '
-                        'forty, and the hadith Qudsi — with their chains of '
+                        'forty, and the hadith Qudsi, with their chains of '
                         'trust intact.',
                         style: TextStyle(height: 1.5, fontSize: 13.5),
                       ),

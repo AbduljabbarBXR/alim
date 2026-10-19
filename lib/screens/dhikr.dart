@@ -72,7 +72,7 @@ class _DhikrScreenState extends ConsumerState<DhikrScreen> {
               Text(
                 done
                     ? 'Completed. May it weigh heavy on your scale.'
-                    : 'Tap the circle for each count — thirty-three, '
+                    : 'Tap the circle for each count: thirty-three, '
                         'thirty-three, thirty-four.',
                 textAlign: TextAlign.center,
                 style: TextStyle(

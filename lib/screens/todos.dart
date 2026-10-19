@@ -108,7 +108,7 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
           const SectionHeader('Open'),
           if (open.isEmpty)
             const EmptyNote(
-              text: 'Nothing open. Work is worship when it is honest — add '
+              text: 'Nothing open. Work is worship when it is honest. Add '
                   'what today asks of you.',
               icon: Icons.task_alt,
             )
