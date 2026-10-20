@@ -2,171 +2,256 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../data/duas.dart';
 import '../state.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import 'quran_reader.dart';
 
-class DuaEntry {
-  const DuaEntry({
-    required this.title,
-    required this.surah,
-    required this.ayah,
-    required this.who,
-    required this.story,
-  });
-
-  final String title;
-  final int surah;
-  final int ayah;
-  final String who;
-  final String story;
-}
-
-const duas = <DuaEntry>[
-  DuaEntry(
-    title: 'Words after the fall',
-    surah: 7,
-    ayah: 23,
-    who: 'Adam and Hawwa',
-    story:
-        'They turned back to Allah after eating from the tree. He taught them '
-        'the words of repentance and accepted them.',
-  ),
-  DuaEntry(
-    title: 'From the belly of the whale',
-    surah: 21,
-    ayah: 87,
-    who: 'Yunus',
-    story:
-        'In the darkness of the whale he called with these words. Allah '
-        'answered and saved him, and then guided the people of Nineveh.',
-  ),
-  DuaEntry(
-    title: 'When illness would not leave',
-    surah: 21,
-    ayah: 83,
-    who: 'Ayyub',
-    story:
-        'He lost his health, his family and his wealth, and still he called '
-        'Allah the Most Merciful. Allah removed the harm and restored him.',
-  ),
-  DuaEntry(
-    title: 'A child in old age',
-    surah: 3,
-    ayah: 38,
-    who: 'Zakariya',
-    story:
-        'Standing in the prayer niche, he asked for a good offspring. Allah '
-        'gave him Yahya, though he was old and his wife could not bear.',
-  ),
-  DuaEntry(
-    title: 'A tongue for the truth',
-    surah: 20,
-    ayah: 25,
-    who: 'Musa',
-    story:
-        'Sent to Pharaoh, he asked for an open chest and an easy task. Allah '
-        'answered and made Harun his helper.',
-  ),
-  DuaEntry(
-    title: 'Shelter in the cave',
-    surah: 18,
-    ayah: 10,
-    who: 'The young men of the cave',
-    story:
-        'They fled their people for their faith and asked for mercy and '
-        'guidance. Allah sheltered them and kept them safe for years.',
-  ),
-  DuaEntry(
-    title: 'While raising the House',
-    surah: 2,
-    ayah: 127,
-    who: 'Ibrahim and Isma\'il',
-    story:
-        'They built the Kaaba with their hands and asked Allah to accept it. '
-        'He accepted their work and raised a prophet from their line.',
-  ),
-  DuaEntry(
-    title: 'Gratitude for a small thing',
-    surah: 27,
-    ayah: 19,
-    who: 'Sulayman',
-    story:
-        'He smiled at the speech of an ant and asked to be grateful for what '
-        'he had been given. Allah gave him a kingdom unlike any after him.',
-  ),
-  DuaEntry(
-    title: 'Good in both worlds',
-    surah: 2,
-    ayah: 201,
-    who: 'The believers',
-    story:
-        'A short and balanced prayer, asking for good in this life and the '
-        'next, and protection from the Fire.',
-  ),
-  DuaEntry(
-    title: 'When the whisper comes',
-    surah: 23,
-    ayah: 97,
-    who: 'The believers',
-    story:
-        'A shelter for the heart when the devils stir doubt. It is followed '
-        'by the same refuge in the next ayah.',
-  ),
-  DuaEntry(
-    title: 'A request for knowledge',
-    surah: 20,
-    ayah: 114,
-    who: 'The Prophet, peace be upon him',
-    story:
-        'Allah taught His Prophet this single request to keep repeating: '
-        'more knowledge, taken with humility.',
-  ),
-  DuaEntry(
-    title: 'Comfort at home',
-    surah: 25,
-    ayah: 74,
-    who: 'The servants of the Most Merciful',
-    story:
-        'They ask for spouses and children who are a comfort, and for a life '
-        'that leads others toward what is good.',
-  ),
-];
-
-class DuasScreen extends ConsumerWidget {
+class DuasScreen extends ConsumerStatefulWidget {
   const DuasScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DuasScreen> createState() => _DuasScreenState();
+}
+
+class _DuasScreenState extends ConsumerState<DuasScreen> {
+  final _search = TextEditingController();
+  String _query = '';
+  String? _category;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<DuaEntry> get _visible {
+    final query = _query.trim().toLowerCase();
+    return duas
+        .where((entry) {
+          if (_category != null && entry.category != _category) return false;
+          if (query.isEmpty) return true;
+          return entry.title.toLowerCase().contains(query) ||
+              entry.who.toLowerCase().contains(query) ||
+              entry.story.toLowerCase().contains(query) ||
+              entry.category.toLowerCase().contains(query) ||
+              entry.source.toLowerCase().contains(query) ||
+              '${entry.surah}:${entry.ayah}'.contains(query);
+        })
+        .toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final day = ref.watch(todayProvider).difference(DateTime(2026)).inDays;
-    final pick = duas[day % duas.length];
+    final pick = duas[day.abs() % duas.length];
+    final visible = _visible;
+    final filtering = _query.trim().isNotEmpty || _category != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Duas')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AlimSpace.lg,
-          0,
-          AlimSpace.lg,
-          AlimSpace.xxl,
-        ),
-        children: [
-          Text(
-            'Duas from the Qur\'an, with the one who said them and what '
-            'happened next. The Arabic and the English are read from the '
-            'same book you carry.',
-            style: TextStyle(
-              color: AlimColors.mutedOf(context),
-              fontSize: 12.5,
-              height: 1.5,
+      appBar: AppBar(
+        title: const Text('Duas'),
+        actions: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: AlimSpace.lg),
+              child: Text(
+                '${duas.length} duas',
+                style: TextStyle(
+                  color: AlimColors.mutedOf(context),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: AlimSpace.md),
-          const SectionHeader('Dua of the day'),
-          _DuaCard(entry: pick, featured: true),
-          const SectionHeader('In the Qur\'an'),
-          for (final entry in duas) _DuaCard(entry: entry),
         ],
+      ),
+      body: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AlimSpace.lg,
+              AlimSpace.sm,
+              AlimSpace.lg,
+              0,
+            ),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                Text(
+                  'A hundred turns to Allah from the Qur\'an, with the one who '
+                  'said them and the story around them. The Arabic and the '
+                  'English are read from the Book you carry.',
+                  style: TextStyle(
+                    color: AlimColors.mutedOf(context),
+                    fontSize: 12.5,
+                    height: 1.55,
+                  ),
+                ),
+                const SizedBox(height: AlimSpace.md),
+                if (!filtering) ...[
+                  const SectionHeader('Dua of the day'),
+                  _DuaCard(entry: pick, featured: true),
+                  const SizedBox(height: AlimSpace.md),
+                ],
+                _SearchBox(
+                  controller: _search,
+                  onChanged: (value) => setState(() => _query = value),
+                  onClear: () {
+                    _search.clear();
+                    setState(() => _query = '');
+                  },
+                ),
+                const SizedBox(height: AlimSpace.sm),
+                _CategoryRail(
+                  selected: _category,
+                  onSelected:
+                      (value) => setState(
+                        () => _category = _category == value ? null : value,
+                      ),
+                ),
+                SectionHeader(
+                  filtering ? '${visible.length} found' : 'In the Qur\'an',
+                  trailing: Text(
+                    filtering ? 'of ${duas.length}' : '${visible.length} duas',
+                    style: TextStyle(
+                      color: AlimColors.mutedOf(context),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AlimSpace.xs),
+              ]),
+            ),
+          ),
+          if (visible.isEmpty)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: EdgeInsets.all(AlimSpace.lg),
+                child: EmptyNote(
+                  text:
+                      'No dua matches that search yet. Try a name, a theme or '
+                      'a surah.',
+                  icon: Icons.search_off_rounded,
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AlimSpace.lg,
+                0,
+                AlimSpace.lg,
+                AlimSpace.xxl,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => _DuaCard(entry: visible[i]),
+                  childCount: visible.length,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchBox extends StatelessWidget {
+  const _SearchBox({
+    required this.controller,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: 'Search by name, story or ayah',
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        suffixIcon:
+            controller.text.isEmpty
+                ? null
+                : IconButton(
+                  tooltip: 'Clear search',
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      ),
+    );
+  }
+}
+
+class _CategoryRail extends StatelessWidget {
+  const _CategoryRail({required this.selected, required this.onSelected});
+
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        children: [
+          _chip(context, 'All', selected == null, () => onSelected(null)),
+          for (final category in duaCategories)
+            _chip(
+              context,
+              category,
+              selected == category,
+              () => onSelected(category),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(
+    BuildContext context,
+    String label,
+    bool active,
+    VoidCallback onTap,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Material(
+        color: active ? scheme.primary : Colors.transparent,
+        shape: StadiumBorder(
+          side: BorderSide(
+            color: active ? scheme.primary : AlimColors.hairlineOf(context),
+          ),
+        ),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active ? scheme.onPrimary : AlimColors.inkOf(context),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -181,126 +266,159 @@ class _DuaCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ayah = ref.watch(ayahAtProvider((entry.surah, entry.ayah)));
-    final book = ref.watch(surahViewProvider(entry.surah)).valueOrNull;
-    final source = 'Qur\'an ${entry.surah}:${entry.ayah}';
+    final loaded = ayah.valueOrNull;
+    final scheme = Theme.of(context).colorScheme;
+    final ink = featured ? const Color(0xFFFBF6EA) : AlimColors.inkOf(context);
+    final body =
+        featured ? const Color(0xFFC7DCD2) : AlimColors.mutedOf(context);
+    final accent = featured ? AlimColors.goldSoft : scheme.primary;
+    final english = featured ? const Color(0xFFE3F1EB) : ink;
+    final open =
+        loaded == null
+            ? null
+            : () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder:
+                    (_) => QuranReaderScreen(
+                      surah: loaded.surah,
+                      focusAyah: loaded.number,
+                    ),
+              ),
+            );
+    final share =
+        loaded == null
+            ? null
+            : () => Share.share(
+              '${loaded.textAr}\n\n${loaded.textEn}\n${entry.source}\n\nAlim',
+            );
     return Padding(
-      padding: const EdgeInsets.only(bottom: AlimSpace.sm),
+      padding: EdgeInsets.only(bottom: featured ? 0 : AlimSpace.sm),
       child: AlimCard(
-        color:
+        color: featured ? AlimColors.leafDeep : null,
+        border:
             featured
-                ? AlimColors.goldSoft.withValues(
-                  alpha:
-                      Theme.of(context).brightness == Brightness.dark
-                          ? 0.08
-                          : 1,
-                )
-                : null,
-        border: featured ? AlimColors.gold.withValues(alpha: 0.35) : null,
+                ? AlimColors.gold.withValues(alpha: 0.58)
+                : AlimColors.hairlineOf(context),
+        padding: EdgeInsets.all(featured ? 18 : AlimSpace.md),
+        onTap: open,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    entry.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15.5,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AlimSpace.xs),
-                AlimPill(label: source, color: AlimColors.gold),
+                AlimPill(label: entry.category, color: accent),
+                const Spacer(),
+                AlimPill(label: entry.source, color: accent),
               ],
+            ),
+            const SizedBox(height: AlimSpace.sm),
+            Text(
+              entry.title,
+              style: TextStyle(
+                color: ink,
+                fontSize: featured ? 21 : 15.5,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
               entry.who,
               style: TextStyle(
-                color: AlimColors.mutedOf(context),
+                color: body,
                 fontSize: 12.5,
+                fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: AlimSpace.sm),
-            switch (ayah) {
-              AsyncData(:final value) => Text(
-                value.textAr,
-                textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl,
-                style: const TextStyle(
-                  fontFamily: quranFamily,
-                  fontSize: 23,
-                  height: 1.9,
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: featured ? 12 : 8,
+              ),
+              decoration: BoxDecoration(
+                color:
+                    featured
+                        ? Colors.white.withValues(alpha: 0.045)
+                        : AlimColors.gold.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(AlimRadius.field),
+                border: Border.all(
+                  color:
+                      featured
+                          ? AlimColors.goldSoft.withValues(alpha: 0.18)
+                          : AlimColors.gold.withValues(alpha: 0.18),
                 ),
               ),
-              AsyncError() => Text(
-                'The ayah could not be read.',
-                style: TextStyle(color: AlimColors.mutedOf(context)),
-              ),
-              _ => const SizedBox(
-                height: 40,
-                child: Center(
+              child: switch (ayah) {
+                AsyncData(:final value) => Text(
+                  value.textAr,
+                  textAlign: TextAlign.right,
+                  textDirection: TextDirection.rtl,
+                  style: TextStyle(
+                    fontFamily: quranFamily,
+                    fontSize: featured ? 24 : 21,
+                    height: 1.9,
+                    color: ink,
+                  ),
+                ),
+                AsyncError() => Text(
+                  'This ayah could not be read.',
+                  style: TextStyle(color: body, fontSize: 12.5),
+                ),
+                _ => Center(
                   child: SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: accent,
+                    ),
                   ),
                 ),
-              ),
-            },
-            const SizedBox(height: AlimSpace.xs),
+              },
+            ),
+            const SizedBox(height: AlimSpace.sm),
             switch (ayah) {
               AsyncData(:final value) => Text(
                 value.textEn,
-                style: const TextStyle(height: 1.6, fontSize: 14),
+                style: TextStyle(color: english, fontSize: 14, height: 1.6),
               ),
               _ => const SizedBox.shrink(),
             },
-            const SizedBox(height: AlimSpace.sm),
-            Text(
-              entry.story,
-              style: TextStyle(
-                color: AlimColors.mutedOf(context),
-                fontSize: 12.5,
-                height: 1.5,
+            if (loaded != null) ...[
+              const SizedBox(height: AlimSpace.sm),
+              Text(
+                entry.story,
+                style: TextStyle(color: body, fontSize: 12.5, height: 1.55),
               ),
-            ),
-            const SizedBox(height: AlimSpace.xs),
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed:
-                      book == null
-                          ? null
-                          : () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder:
-                                  (_) => QuranReaderScreen(
-                                    surah: entry.surah,
-                                    focusAyah:
-                                        book.surah.firstAyah + entry.ayah - 1,
-                                  ),
-                            ),
-                          ),
-                  icon: const Icon(Icons.menu_book_outlined, size: 17),
-                  label: const Text('Read in the Qur\'an'),
-                ),
-                const Spacer(),
-                IconButton(
-                  tooltip: 'Share this dua',
-                  icon: const Icon(Icons.ios_share, size: 19),
-                  onPressed:
-                      ayah.valueOrNull == null
-                          ? null
-                          : () => Share.share(
-                            '${ayah.value!.textAr}\n\n'
-                            '${ayah.value!.textEn}\n'
-                            '$source\n\nAlim',
-                          ),
-                ),
-              ],
-            ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: accent,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 36),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: open,
+                    icon: const Icon(Icons.menu_book_outlined, size: 17),
+                    label: const Text('Read in the Qur\'an'),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: 'Share this dua',
+                    visualDensity: VisualDensity.compact,
+                    icon: Icon(
+                      Icons.ios_share_rounded,
+                      size: 18,
+                      color: accent,
+                    ),
+                    onPressed: share,
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

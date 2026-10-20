@@ -82,6 +82,154 @@ class AlimColors {
           : hairline;
 }
 
+/// The Qur'an has its own quiet room in Alim: charcoal and bronze at night,
+/// warm parchment and bronze by day. The teal is kept for the small lines
+/// that point back to the Book.
+class QuranPalette {
+  const QuranPalette({
+    required this.bg,
+    required this.surface,
+    required this.surfaceAlt,
+    required this.ink,
+    required this.muted,
+    required this.latin,
+    required this.translation,
+    required this.bronze,
+    required this.bronzeDeep,
+    required this.hairline,
+    required this.accent,
+  });
+
+  final Color bg;
+  final Color surface;
+  final Color surfaceAlt;
+  final Color ink;
+  final Color muted;
+  final Color latin;
+  final Color translation;
+  final Color bronze;
+  final Color bronzeDeep;
+  final Color hairline;
+  final Color accent;
+
+  bool get isDark => bg.computeLuminance() < 0.2;
+
+  Color get bronzeTint => bronze.withValues(alpha: 0.12);
+  Color get faintBronze => bronze.withValues(alpha: 0.28);
+  Color get hairlineSoft => hairline.withValues(alpha: 0.65);
+
+  static const dark = QuranPalette(
+    bg: Color(0xFF0F1212),
+    surface: Color(0xFF141818),
+    surfaceAlt: Color(0xFF181D1D),
+    ink: Color(0xFFE3E3E3),
+    muted: Color(0xFF949494),
+    latin: Color(0xFF5F9E97),
+    translation: Color(0xFFA6A6A6),
+    bronze: Color(0xFFB29A7A),
+    bronzeDeep: Color(0xFF8F7C67),
+    hairline: Color(0xFF2C3131),
+    accent: Color(0xFF1B7A73),
+  );
+
+  static const light = QuranPalette(
+    bg: Color(0xFFF7F1E6),
+    surface: Color(0xFFFFFDF8),
+    surfaceAlt: Color(0xFFF2EADB),
+    ink: Color(0xFF23312B),
+    muted: Color(0xFF6B7872),
+    latin: Color(0xFF3F7773),
+    translation: Color(0xFF55615C),
+    bronze: Color(0xFF9C8872),
+    bronzeDeep: Color(0xFF8F7C67),
+    hairline: Color(0xFFE3DCCB),
+    accent: Color(0xFF1B7A73),
+  );
+
+  static QuranPalette of(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? dark : light;
+}
+
+/// A local theme for the two Qur'an screens, so the section reads in bronze
+/// and parchment without changing the rest of the app.
+ThemeData buildQuranTheme(Brightness brightness) {
+  final base = buildAlimTheme(brightness);
+  final p =
+      brightness == Brightness.dark ? QuranPalette.dark : QuranPalette.light;
+  final scheme = base.colorScheme.copyWith(
+    primary: p.bronze,
+    onPrimary: brightness == Brightness.dark ? p.bg : const Color(0xFF2A2116),
+    secondary: p.latin,
+    onSecondary: p.bg,
+    surface: p.surface,
+    onSurface: p.ink,
+  );
+  final fieldBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(AlimRadius.field),
+    borderSide: BorderSide(color: p.hairline),
+  );
+  return base.copyWith(
+    colorScheme: scheme,
+    scaffoldBackgroundColor: p.bg,
+    canvasColor: p.bg,
+    appBarTheme: base.appBarTheme.copyWith(
+      backgroundColor: p.bg,
+      foregroundColor: p.ink,
+      surfaceTintColor: Colors.transparent,
+      iconTheme: IconThemeData(color: p.ink),
+      titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
+        color: p.ink,
+        fontSize: 20,
+      ),
+      shape: Border(bottom: BorderSide(color: p.hairline, width: 1)),
+    ),
+    tabBarTheme: TabBarThemeData(
+      labelColor: p.bronze,
+      unselectedLabelColor: p.muted,
+      indicatorColor: p.bronze,
+      dividerColor: Colors.transparent,
+      overlayColor: WidgetStatePropertyAll(p.bronze.withValues(alpha: 0.06)),
+      labelStyle: const TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 13,
+        letterSpacing: 0.3,
+      ),
+      unselectedLabelStyle: const TextStyle(
+        fontWeight: FontWeight.w600,
+        fontSize: 13,
+        letterSpacing: 0.2,
+      ),
+    ),
+    dividerTheme: DividerThemeData(color: p.hairline, thickness: 1, space: 1),
+    inputDecorationTheme: base.inputDecorationTheme.copyWith(
+      filled: true,
+      fillColor: p.surface,
+      hintStyle: TextStyle(color: p.muted),
+      prefixIconColor: p.muted,
+      suffixIconColor: p.muted,
+      border: fieldBorder,
+      enabledBorder: fieldBorder,
+      focusedBorder: fieldBorder.copyWith(
+        borderSide: BorderSide(color: p.bronze, width: 1.4),
+      ),
+      labelStyle: TextStyle(color: p.muted),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: p.bronze,
+      linearTrackColor: p.hairline,
+    ),
+    snackBarTheme: base.snackBarTheme.copyWith(
+      backgroundColor: p.surfaceAlt,
+      contentTextStyle: TextStyle(color: p.ink),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AlimRadius.field),
+        side: BorderSide(color: p.hairline),
+      ),
+    ),
+    listTileTheme: ListTileThemeData(iconColor: p.bronze, textColor: p.ink),
+  );
+}
+
 class AlimSpace {
   const AlimSpace._();
   static const xxs = 4.0;

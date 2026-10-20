@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:alim/data/duas.dart';
 import 'package:alim/data/store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -303,6 +304,24 @@ void main() {
       expect(await store.lastRead(), isNull);
       expect(await store.bookmarks(), isEmpty);
       expect(await store.todos(), isEmpty);
+    });
+  });
+
+  group('the hundred duas', () {
+    test('are whole, unique and rooted in real ayat', () async {
+      expect(duas, hasLength(100));
+      final seen = <String>{};
+      for (final entry in duas) {
+        expect(entry.title, isNotEmpty);
+        expect(entry.who, isNotEmpty);
+        expect(entry.story, isNotEmpty);
+        expect(duaCategories, contains(entry.category));
+        final key = '${entry.surah}:${entry.ayah}';
+        expect(seen.add(key), isTrue, reason: 'duplicate $key');
+        final ayah = await store.ayahAt(entry.surah, entry.ayah);
+        expect(ayah.surah, entry.surah);
+        expect(ayah.ayah, entry.ayah);
+      }
     });
   });
 

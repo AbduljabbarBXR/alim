@@ -239,12 +239,14 @@ class StarNumber extends StatelessWidget {
     this.size = 40,
     this.color,
     this.filled = false,
+    this.strokeWidth = 1.3,
   });
 
   final int number;
   final double size;
   final Color? color;
   final bool filled;
+  final double strokeWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +255,11 @@ class StarNumber extends StatelessWidget {
       width: size,
       height: size,
       child: CustomPaint(
-        painter: _StarPainter(c, filled ? c.withValues(alpha: 0.14) : null),
+        painter: _StarPainter(
+          c,
+          filled ? c.withValues(alpha: 0.14) : null,
+          strokeWidth,
+        ),
         child: Center(
           child: Text(
             '$number',
@@ -270,10 +276,11 @@ class StarNumber extends StatelessWidget {
 }
 
 class _StarPainter extends CustomPainter {
-  _StarPainter(this.color, this.fill);
+  _StarPainter(this.color, this.fill, this.strokeWidth);
 
   final Color color;
   final Color? fill;
+  final double strokeWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -300,13 +307,13 @@ class _StarPainter extends CustomPainter {
       Paint()
         ..color = color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3,
+        ..strokeWidth = strokeWidth,
     );
   }
 
   @override
   bool shouldRepaint(covariant _StarPainter old) =>
-      old.color != color || old.fill != fill;
+      old.color != color || old.fill != fill || old.strokeWidth != strokeWidth;
 }
 
 class ProgressRing extends StatelessWidget {
