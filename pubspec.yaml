@@ -2,7 +2,7 @@ name: alim
 description: "Alim — your deen and your day, together. Qur'an, sahih hadith, stories, daily worship and work in one place."
 publish_to: 'none'
 
-version: 1.4.5+14
+version: 1.4.6+15
 
 environment:
   sdk: ^3.7.2

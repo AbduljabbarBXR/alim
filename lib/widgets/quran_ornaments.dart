@@ -143,8 +143,8 @@ class _RevelationPainter extends CustomPainter {
       old.madina != madina || old.color != color;
 }
 
-/// The single header for a surah: revelation mark, Arabic name, its place and
-/// length, and the one control that starts or pauses the recitation.
+/// The surah band: the surah's number on the left, its Arabic name in a
+/// cartouche, and the one control that starts or pauses the recitation.
 class SuraBanner extends StatelessWidget {
   const SuraBanner({
     super.key,
@@ -167,118 +167,234 @@ class SuraBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = QuranPalette.of(context);
     final place = surah.revelation == 'Madina' ? 'Medinan' : 'Meccan';
-    final meta = [
-      surah.name,
-      place,
-      '${surah.ayat} ayat',
+    final meta = '${surah.name} · $place · ${surah.ayat} ayat';
+    final details = [
       if (juz != null) 'Juz $juz',
       if (page != null) 'Page $page',
     ].join(' · ');
+    final iconColor = p.isDark ? p.bg : p.surface;
     return Semantics(
       label:
-          'Surah ${surah.name}, ${surah.number}, $place, '
+          'Surah ${surah.name}, number ${surah.number}, $place, '
           '${surah.ayat} ayat',
       child: Container(
-        height: 80,
-        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-        decoration: BoxDecoration(
-          color: p.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: p.hairline),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: p.bronzeTint,
-                border: Border.all(color: p.faintBronze, width: 0.8),
-              ),
-              child: RevelationGlyph(
-                revelation: surah.revelation,
-                color: p.bronze,
-                size: 23,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    surah.nameAr,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textDirection: TextDirection.rtl,
+        height: 108,
+        width: double.infinity,
+        color: p.bg,
+        child: CustomPaint(
+          painter: _SurahBandPainter(p),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Row(
+              children: [
+                Container(
+                  key: const Key('surah-header-number'),
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: p.surface,
+                    border: Border.all(color: p.faintBronze),
+                  ),
+                  child: Text(
+                    '${surah.number}',
                     style: TextStyle(
-                      fontFamily: arabicFamily,
-                      fontSize: 24,
-                      height: 1.1,
+                      color: p.bronzeDeep,
+                      fontSize: 17,
                       fontWeight: FontWeight.w700,
-                      color: p.ink,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    meta,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: p.muted,
-                      fontSize: 10.5,
-                      letterSpacing: 0.15,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (onPlay != null) ...[
-              const SizedBox(width: 8),
-              Semantics(
-                button: true,
-                label: playing ? 'Pause recitation' : 'Listen to surah',
-                child: Material(
-                  color: p.bronzeTint,
-                  shape: CircleBorder(side: BorderSide(color: p.faintBronze)),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: onPlay,
-                    child: SizedBox(
-                      width: 52,
-                      height: 52,
-                      child: Center(
-                        child:
-                            loading
-                                ? SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.8,
-                                    color: p.bronze,
-                                  ),
-                                )
-                                : Icon(
-                                  playing
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded,
-                                  size: 27,
-                                  color: p.bronze,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: CustomPaint(
+                    painter: _SurahCartouchePainter(p),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 30,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'سُورَةُ ${surah.nameAr}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textDirection: TextDirection.rtl,
+                                style: TextStyle(
+                                  fontFamily: arabicFamily,
+                                  fontSize: 27,
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w700,
+                                  color: p.ink,
                                 ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            meta,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: p.muted,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (details.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              details,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: p.muted, fontSize: 9.5),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ],
+                if (onPlay != null) ...[
+                  const SizedBox(width: 10),
+                  Semantics(
+                    button: true,
+                    label: playing ? 'Pause recitation' : 'Listen to surah',
+                    child: Material(
+                      color: p.bronzeDeep,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: onPlay,
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: Center(
+                            child:
+                                loading
+                                    ? SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: iconColor,
+                                      ),
+                                    )
+                                    : Icon(
+                                      playing
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                                      size: 28,
+                                      color: iconColor,
+                                    ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+class _SurahBandPainter extends CustomPainter {
+  _SurahBandPainter(this.p);
+
+  final QuranPalette p;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line =
+        Paint()
+          ..color = p.faintBronze
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8;
+    canvas.drawLine(const Offset(10, 6), Offset(size.width - 10, 6), line);
+    canvas.drawLine(
+      Offset(10, size.height - 6),
+      Offset(size.width - 10, size.height - 6),
+      line,
+    );
+    final diamond =
+        Path()
+          ..moveTo(size.width / 2, 2)
+          ..lineTo(size.width / 2 + 4, 6)
+          ..lineTo(size.width / 2, 10)
+          ..lineTo(size.width / 2 - 4, 6)
+          ..close();
+    canvas.drawPath(diamond, line);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SurahBandPainter old) => old.p != p;
+}
+
+class _SurahCartouchePainter extends CustomPainter {
+  _SurahCartouchePainter(this.p);
+
+  final QuranPalette p;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shape = _shape(size, 1);
+    canvas.drawPath(shape, Paint()..color = p.surface);
+    canvas.drawPath(
+      shape,
+      Paint()
+        ..color = p.faintBronze
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    canvas.drawPath(
+      _shape(size, 5),
+      Paint()
+        ..color = p.bronze.withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+    final center = size.width / 2;
+    for (final y in [0.0, size.height]) {
+      final diamond =
+          Path()
+            ..moveTo(center, y - 3)
+            ..lineTo(center + 4, y)
+            ..lineTo(center, y + 3)
+            ..lineTo(center - 4, y)
+            ..close();
+      canvas.drawPath(
+        diamond,
+        Paint()
+          ..color = p.bronze
+          ..style = PaintingStyle.fill,
+      );
+    }
+  }
+
+  Path _shape(Size size, double inset) {
+    final w = size.width;
+    final h = size.height;
+    const r = 16.0;
+    final path = Path();
+    path.moveTo(inset + r, inset);
+    path.quadraticBezierTo(w / 2, inset - 5, w - inset - r, inset);
+    path.quadraticBezierTo(w - inset, h / 2, w - inset - r, h - inset);
+    path.quadraticBezierTo(w / 2, h - inset + 5, inset + r, h - inset);
+    path.quadraticBezierTo(inset, h / 2, inset + r, inset);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldRepaint(covariant _SurahCartouchePainter old) => old.p != p;
 }
 
 /// The Bismillah line, with two quiet rules on either side.

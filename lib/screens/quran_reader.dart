@@ -32,10 +32,14 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
   late final PageController _pages = PageController(
     initialPage: widget.surah - 1,
   );
+  final ScrollController _strip = ScrollController();
   late int _current = widget.surah;
   bool _translation = true;
   bool _transliteration = true;
+  bool _stripReady = false;
   final Map<int, int> _tapped = {};
+
+  static const double _stripItemWidth = 78;
 
   @override
   void initState() {
@@ -47,6 +51,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
   @override
   void dispose() {
     _pages.dispose();
+    _strip.dispose();
     super.dispose();
   }
 
@@ -55,6 +60,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
     final p = QuranPalette.of(context);
     final profile = ref.watch(profileProvider);
     final loaded = ref.watch(surahViewProvider(_current)).valueOrNull;
+    final surahs = ref.watch(surahsProvider).valueOrNull ?? const <Surah>[];
     final audio = ref.watch(audioProvider);
     final reciter = ref.watch(activeReciterProvider);
     final downloads = ref.watch(audioDownloadsProvider);
@@ -76,6 +82,13 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
         local != null && local >= 1 && local <= (loaded?.surah.ayat ?? 0);
     final here = audio.surah == _current && audio.ayah != null;
     final busy = task?.busy ?? false;
+    if (!_stripReady && surahs.isNotEmpty) {
+      _stripReady = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollStrip(_current, animate: false);
+      });
+    }
+
     final status =
         audio.failed && here
             ? 'Could not play. Tap play to try again.'
@@ -149,23 +162,24 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-            child: SizedBox(
-              height: 80,
-              child:
-                  loaded == null
-                      ? const SizedBox.shrink()
-                      : SuraBanner(
-                        surah: loaded.surah,
-                        juz: first?.juz,
-                        page: first?.page,
-                        playing: here && audio.playing,
-                        loading: audio.loading && here,
-                        onPlay: () => _playPressed(loaded, reciter, audio),
-                      ),
-            ),
+          _SurahRail(
+            surahs: surahs,
+            current: _current,
+            controller: _strip,
+            width: _stripItemWidth,
+            onPick: _goToSurah,
+            onPrevious: _current > 1 ? () => _goToSurah(_current - 1) : null,
+            onNext: _current < 114 ? () => _goToSurah(_current + 1) : null,
           ),
+          if (loaded != null)
+            SuraBanner(
+              surah: loaded.surah,
+              juz: first?.juz,
+              page: first?.page,
+              playing: here && audio.playing,
+              loading: audio.loading && here,
+              onPlay: () => _playPressed(loaded, reciter, audio),
+            ),
           Expanded(
             child: PageView.builder(
               controller: _pages,
@@ -173,6 +187,9 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
               onPageChanged: (page) {
                 setState(() => _current = page + 1);
                 if (page + 2 <= 114) ref.read(surahViewProvider(page + 2));
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _scrollStrip(page + 1);
+                });
               },
               itemBuilder: (context, index) {
                 final surah = index + 1;
@@ -217,6 +234,34 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
               )
               : null,
     );
+  }
+
+  void _goToSurah(int number) {
+    if (number < 1 || number > 114 || number == _current) return;
+    _pages.animateToPage(
+      number - 1,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _scrollStrip(int surah, {bool animate = true}) {
+    if (!_strip.hasClients) return;
+    final position = _strip.position;
+    final target =
+        ((surah - 1) * _stripItemWidth -
+                (position.viewportDimension - _stripItemWidth) / 2)
+            .clamp(0.0, position.maxScrollExtent)
+            .toDouble();
+    if (animate) {
+      _strip.animateTo(
+        target,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _strip.jumpTo(target);
+    }
   }
 
   void _playPressed(SurahView view, Reciter reciter, AudioView audio) {
@@ -294,6 +339,128 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
       ref,
       reciter: reciter,
       surah: view.surah,
+    );
+  }
+}
+
+class _SurahRail extends StatelessWidget {
+  const _SurahRail({
+    required this.surahs,
+    required this.current,
+    required this.controller,
+    required this.width,
+    required this.onPick,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final List<Surah> surahs;
+  final int current;
+  final ScrollController controller;
+  final double width;
+  final ValueChanged<int> onPick;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = QuranPalette.of(context);
+    return Container(
+      key: const Key('surah-rail'),
+      height: 40,
+      decoration: BoxDecoration(
+        color: p.bg,
+        border: Border(bottom: BorderSide(color: p.hairline)),
+      ),
+      child: Row(
+        children: [
+          _RailArrow(
+            key: const Key('previous-surah'),
+            icon: Icons.chevron_left_rounded,
+            tooltip: 'Previous surah',
+            onTap: onPrevious,
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              itemExtent: width,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              itemCount: surahs.length,
+              itemBuilder: (context, i) {
+                final surah = surahs[i];
+                final active = surah.number == current;
+                return InkWell(
+                  onTap: () => onPick(surah.number),
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: active ? p.bronze : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      surah.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: active ? p.ink : p.muted,
+                        fontSize: 11.5,
+                        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          _RailArrow(
+            key: const Key('next-surah'),
+            icon: Icons.chevron_right_rounded,
+            tooltip: 'Next surah',
+            onTap: onNext,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RailArrow extends StatelessWidget {
+  const _RailArrow({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = QuranPalette.of(context);
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: tooltip,
+      child: InkResponse(
+        onTap: onTap,
+        radius: 20,
+        child: SizedBox(
+          width: 30,
+          height: 40,
+          child: Icon(
+            icon,
+            size: 19,
+            color: onTap == null ? p.hairline : p.muted,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -703,100 +870,141 @@ class _AyahTile extends StatelessWidget {
             : focused
             ? p.surfaceAlt.withValues(alpha: 0.65)
             : Colors.transparent;
+    final trimmed = ayah.textAr.trimRight();
+    final hasSajdaMark = trimmed.endsWith('۩');
+    final arabic =
+        hasSajdaMark
+            ? trimmed.substring(0, trimmed.length - 1).trimRight()
+            : trimmed;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Container(
           color: tint,
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          padding: const EdgeInsets.fromLTRB(14, 14, 16, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text.rich(
-                TextSpan(
+              Container(
+                key: ValueKey('ayah-number-${ayah.number}'),
+                width: 28,
+                height: 28,
+                margin: const EdgeInsets.only(top: 2),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: p.bronzeTint,
+                  border: Border.all(color: p.faintBronze),
+                ),
+                child: Text(
+                  '${ayah.ayah}',
+                  style: TextStyle(
+                    color: p.bronzeDeep,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextSpan(text: ayah.textAr),
-                    TextSpan(
-                      text: ' ۝${quranDigits(ayah.ayah)}',
-                      style: TextStyle(
-                        fontFamily: arabicFamily,
-                        fontSize: 20 * scale,
-                        color: p.bronze,
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: arabic),
+                          if (ayah.sajda || hasSajdaMark)
+                            TextSpan(
+                              text: '  ۩',
+                              style: TextStyle(
+                                fontFamily: arabicFamily,
+                                fontSize: 22 * scale,
+                                color: p.bronzeDeep,
+                              ),
+                            ),
+                          TextSpan(
+                            text: ' ۝${quranDigits(ayah.ayah)}',
+                            style: TextStyle(
+                              fontFamily: arabicFamily,
+                              fontSize: 20 * scale,
+                              color: p.bronzeDeep,
+                            ),
+                          ),
+                        ],
                       ),
+                      textAlign: TextAlign.right,
+                      textDirection: TextDirection.rtl,
+                      style: TextStyle(
+                        fontFamily: quranFamily,
+                        fontFamilyFallback: const [arabicFamily],
+                        fontSize: 23 * scale,
+                        height: 1.9,
+                        color: p.ink,
+                      ),
+                    ),
+                    if (transliteration.isNotEmpty) ...[
+                      const SizedBox(height: 7),
+                      Text(
+                        transliteration,
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          color: p.muted,
+                          fontSize: 12.5,
+                          height: 1.45,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                    if (translation) ...[
+                      const SizedBox(height: 7),
+                      Text(
+                        ayah.textEn,
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          color: p.translation,
+                          fontSize: 16,
+                          height: 1.55,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 5,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          '$surahName ${ayah.surah}:${ayah.ayah}',
+                          style: TextStyle(
+                            color: p.latin,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (active)
+                          QuranPill(
+                            label: audioPlaying ? 'Playing' : 'Paused',
+                            icon:
+                                audioPlaying
+                                    ? Icons.graphic_eq_rounded
+                                    : Icons.pause_rounded,
+                            color: p.bronze,
+                          ),
+                        if (bookmarked)
+                          Icon(Icons.bookmark, size: 14, color: p.bronze),
+                        if (isLastRead)
+                          QuranPill(label: 'Your place', color: p.bronze),
+                        if (ayah.sajda)
+                          const QuranPill(
+                            label: 'Sajda',
+                            color: AlimColors.rose,
+                          ),
+                      ],
                     ),
                   ],
                 ),
-                textAlign: TextAlign.right,
-                textDirection: TextDirection.rtl,
-                style: TextStyle(
-                  fontFamily: quranFamily,
-                  fontSize: 23 * scale,
-                  height: 1.9,
-                  color: p.ink,
-                ),
-              ),
-              if (transliteration.isNotEmpty) ...[
-                const SizedBox(height: 7),
-                Text(
-                  transliteration,
-                  textAlign: TextAlign.left,
-                  style: TextStyle(
-                    color: p.muted,
-                    fontSize: 12.5,
-                    height: 1.45,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-              if (translation) ...[
-                const SizedBox(height: 7),
-                Text(
-                  ayah.textEn,
-                  textAlign: TextAlign.left,
-                  style: TextStyle(
-                    color: p.translation,
-                    fontSize: 15,
-                    height: 1.55,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 5,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '$surahName ${ayah.surah}:${ayah.ayah}',
-                    style: TextStyle(
-                      color: p.latin,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (active)
-                    QuranPill(
-                      label: audioPlaying ? 'Playing' : 'Paused',
-                      icon:
-                          audioPlaying
-                              ? Icons.graphic_eq_rounded
-                              : Icons.pause_rounded,
-                      color: p.bronze,
-                    ),
-                  if (bookmarked)
-                    Icon(Icons.bookmark, size: 14, color: p.bronze),
-                  if (isLastRead)
-                    QuranPill(label: 'Your place', color: p.bronze),
-                  if (ayah.sajda)
-                    const QuranPill(label: 'Sajda', color: AlimColors.rose),
-                  if (focused && !active)
-                    QuranPill(
-                      label: 'Opened here',
-                      icon: Icons.arrow_downward_rounded,
-                      color: p.latin,
-                    ),
-                ],
               ),
             ],
           ),

@@ -129,6 +129,16 @@ void main() {
     await settle(tester);
 
     expect(find.byType(SuraBanner), findsOneWidget);
+    expect(find.byKey(const Key('surah-rail')), findsOneWidget);
+    expect(find.byKey(const Key('surah-header-number')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('surah-header-number')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('ayah-number-1')), findsOneWidget);
     expect(find.text('Bismillaahir-rahmaanir-raheem'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Hide transliteration'));
@@ -138,6 +148,39 @@ void main() {
     await tester.tap(find.byTooltip('Show transliteration'));
     await settle(tester);
     expect(find.text('Bismillaahir-rahmaanir-raheem'), findsOneWidget);
+  });
+
+  testWidgets('the surah rail moves to the next surah', (tester) async {
+    await tester.pumpWidget(wrap(const QuranReaderScreen(surah: 1)));
+    await settle(tester);
+
+    await tester.tap(find.byKey(const Key('next-surah')));
+    await settle(tester);
+
+    expect(find.text('Al-Baqara 2:1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('surah-header-number')),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the reader shows the prostration mark and ayah number', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(const QuranReaderScreen(surah: 7, focusAyah: 1160)),
+    );
+    await settle(tester);
+
+    final marked = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .where((text) => text.text.toPlainText().contains('۩'));
+    expect(marked, isNotEmpty);
+    expect(find.byKey(const ValueKey('ayah-number-1160')), findsOneWidget);
+    expect(find.text('Opened here'), findsNothing);
   });
 
   testWidgets('swiping the reader carries on to the next surah and back', (
