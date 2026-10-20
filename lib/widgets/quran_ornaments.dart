@@ -143,300 +143,142 @@ class _RevelationPainter extends CustomPainter {
       old.madina != madina || old.color != color;
 }
 
-/// The banner that opens a surah: a small revelation mark, the Arabic name,
-/// and a medallion holding the number of ayat. The frame is drawn, never
-/// borrowed, so it belongs to Alim.
+/// The single header for a surah: revelation mark, Arabic name, its place and
+/// length, and the one control that starts or pauses the recitation.
 class SuraBanner extends StatelessWidget {
-  const SuraBanner({super.key, required this.surah});
+  const SuraBanner({
+    super.key,
+    required this.surah,
+    this.juz,
+    this.page,
+    this.onPlay,
+    this.playing = false,
+    this.loading = false,
+  });
 
   final Surah surah;
+  final int? juz;
+  final int? page;
+  final VoidCallback? onPlay;
+  final bool playing;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final p = QuranPalette.of(context);
     final place = surah.revelation == 'Madina' ? 'Medinan' : 'Meccan';
+    final meta = [
+      surah.name,
+      place,
+      '${surah.ayat} ayat',
+      if (juz != null) 'Juz $juz',
+      if (page != null) 'Page $page',
+    ].join(' · ');
     return Semantics(
       label:
           'Surah ${surah.name}, ${surah.number}, $place, '
           '${surah.ayat} ayat',
       child: Container(
-        height: 68,
+        height: 80,
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
         decoration: BoxDecoration(
           color: p.surface,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: p.hairline),
         ),
-        clipBehavior: Clip.antiAlias,
-        child: CustomPaint(
-          painter: _BannerPainter(p),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: p.bronzeTint,
-                    border: Border.all(color: p.faintBronze, width: 0.8),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: p.bronzeTint,
+                border: Border.all(color: p.faintBronze, width: 0.8),
+              ),
+              child: RevelationGlyph(
+                revelation: surah.revelation,
+                color: p.bronze,
+                size: 23,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    surah.nameAr,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(
+                      fontFamily: arabicFamily,
+                      fontSize: 24,
+                      height: 1.1,
+                      fontWeight: FontWeight.w700,
+                      color: p.ink,
+                    ),
                   ),
-                  child: RevelationGlyph(
-                    revelation: surah.revelation,
-                    color: p.bronze,
-                    size: 22,
+                  const SizedBox(height: 3),
+                  Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: p.muted,
+                      fontSize: 10.5,
+                      letterSpacing: 0.15,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        surah.nameAr,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textDirection: TextDirection.rtl,
-                        style: TextStyle(
-                          fontFamily: arabicFamily,
-                          fontSize: 23,
-                          height: 1.1,
-                          fontWeight: FontWeight.w700,
-                          color: p.ink,
-                        ),
+                ],
+              ),
+            ),
+            if (onPlay != null) ...[
+              const SizedBox(width: 8),
+              Semantics(
+                button: true,
+                label: playing ? 'Pause recitation' : 'Listen to surah',
+                child: Material(
+                  color: p.bronzeTint,
+                  shape: CircleBorder(side: BorderSide(color: p.faintBronze)),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onPlay,
+                    child: SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: Center(
+                        child:
+                            loading
+                                ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.8,
+                                    color: p.bronze,
+                                  ),
+                                )
+                                : Icon(
+                                  playing
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                  size: 27,
+                                  color: p.bronze,
+                                ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${surah.name} · $place · ${surah.ayat} ayat',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: p.muted,
-                          fontSize: 10.5,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: p.faintBronze, width: 1),
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${surah.ayat}',
-                          style: TextStyle(
-                            color: p.bronze,
-                            fontSize: 12.5,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          'ayat',
-                          style: TextStyle(
-                            color: p.muted,
-                            fontSize: 7.5,
-                            height: 1.4,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
-}
-
-class _BannerPainter extends CustomPainter {
-  _BannerPainter(this.p);
-
-  final QuranPalette p;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final line =
-        Paint()
-          ..color = p.bronze.withValues(alpha: 0.44)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.8;
-    final faint =
-        Paint()
-          ..color = p.bronze.withValues(alpha: 0.20)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.7;
-    canvas.drawRect(
-      Rect.fromLTWH(5.5, 5.5, size.width - 11, size.height - 11),
-      line,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(9.5, 9.5, size.width - 19, size.height - 19),
-      faint,
-    );
-    for (final c in [
-      Offset(5.5, 5.5),
-      Offset(size.width - 5.5, 5.5),
-      Offset(5.5, size.height - 5.5),
-      Offset(size.width - 5.5, size.height - 5.5),
-    ]) {
-      canvas.drawCircle(c, 1.7, Paint()..color = p.bronze);
-      canvas.drawCircle(c, 3.4, faint);
-    }
-    final center = Offset(size.width / 2, size.height / 2);
-    for (var i = 0; i < 4; i++) {
-      final angle = i * math.pi / 2;
-      final from =
-          center +
-          Offset(math.cos(angle), math.sin(angle)) * (size.width / 2 - 14);
-      final to =
-          center +
-          Offset(math.cos(angle), math.sin(angle)) * (size.width / 2 - 8);
-      canvas.drawLine(from, to, faint);
-    }
-    final diamond =
-        Paint()
-          ..color = p.bronze.withValues(alpha: 0.30)
-          ..style = PaintingStyle.fill;
-    for (final x in [size.width * 0.18, size.width * 0.82]) {
-      final path =
-          Path()
-            ..moveTo(x, size.height / 2 - 3)
-            ..lineTo(x + 3, size.height / 2)
-            ..lineTo(x, size.height / 2 + 3)
-            ..lineTo(x - 3, size.height / 2)
-            ..close();
-      canvas.drawPath(path, diamond);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _BannerPainter old) => old.p != p;
-}
-
-/// The eight-lobed medallion that carries an ayah number in the reader.
-class AyahMedallion extends StatelessWidget {
-  const AyahMedallion({
-    super.key,
-    required this.number,
-    this.width = 38,
-    this.height = 50,
-    this.color,
-    this.fill,
-  });
-
-  final int number;
-  final double width;
-  final double height;
-  final Color? color;
-  final Color? fill;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = QuranPalette.of(context);
-    final c = color ?? p.bronze;
-    return SizedBox(
-      width: width,
-      height: height,
-      child: CustomPaint(
-        painter: _MedallionPainter(c, fill ?? p.surface),
-        child: Center(
-          child: Text(
-            '$number',
-            style: TextStyle(
-              color: c,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MedallionPainter extends CustomPainter {
-  _MedallionPainter(this.color, this.fill);
-
-  final Color color;
-  final Color fill;
-
-  Path _lobes(Size size, double inset, double squash) {
-    final path = Path();
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final rx = size.width / 2 - inset;
-    final ry = size.height / 2 - inset;
-    for (var i = 0; i < 16; i++) {
-      final angle = -math.pi / 2 + i * math.pi / 8;
-      final factor = i.isEven ? 1.0 : squash;
-      final x = cx + rx * factor * math.cos(angle);
-      final y = cy + ry * factor * math.sin(angle);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    return path..close();
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final outer = _lobes(size, 1.5, 0.76);
-    canvas.drawPath(outer, Paint()..color = fill);
-    canvas.drawPath(
-      outer,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.3,
-    );
-    final inner = _lobes(size, size.width * 0.16, 0.80);
-    canvas.drawPath(
-      inner,
-      Paint()
-        ..color = color.withValues(alpha: 0.42)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.7,
-    );
-    final mark =
-        Paint()
-          ..color = color.withValues(alpha: 0.55)
-          ..strokeWidth = 1;
-    canvas.drawLine(
-      Offset(size.width / 2, size.height * 0.03),
-      Offset(size.width / 2, size.height * 0.14),
-      mark,
-    );
-    canvas.drawLine(
-      Offset(size.width / 2, size.height * 0.86),
-      Offset(size.width / 2, size.height * 0.97),
-      mark,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _MedallionPainter old) =>
-      old.color != color || old.fill != fill;
 }
 
 /// The Bismillah line, with two quiet rules on either side.

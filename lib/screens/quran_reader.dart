@@ -32,27 +32,21 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
   late final PageController _pages = PageController(
     initialPage: widget.surah - 1,
   );
-  final ScrollController _strip = ScrollController();
   late int _current = widget.surah;
   bool _translation = true;
-  bool _stripReady = false;
+  bool _transliteration = true;
   final Map<int, int> _tapped = {};
-
-  static const double _stripItemWidth = 104;
 
   @override
   void initState() {
     super.initState();
     _translation = ref.read(profileProvider).translationOn;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scrollStrip(_current, animate: false);
-    });
+    _transliteration = ref.read(profileProvider).transliterationOn;
   }
 
   @override
   void dispose() {
     _pages.dispose();
-    _strip.dispose();
     super.dispose();
   }
 
@@ -61,7 +55,6 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
     final p = QuranPalette.of(context);
     final profile = ref.watch(profileProvider);
     final loaded = ref.watch(surahViewProvider(_current)).valueOrNull;
-    final surahs = ref.watch(surahsProvider).valueOrNull ?? const <Surah>[];
     final audio = ref.watch(audioProvider);
     final reciter = ref.watch(activeReciterProvider);
     final downloads = ref.watch(audioDownloadsProvider);
@@ -98,57 +91,11 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
                 ? 'Downloads before playing'
                 : 'Tap play to listen');
 
-    if (!_stripReady && surahs.isNotEmpty) {
-      _stripReady = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _scrollStrip(_current, animate: false);
-      });
-    }
-
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 52,
         titleSpacing: 0,
-        title: Row(
-          children: [
-            if (loaded != null)
-              RevelationGlyph(
-                revelation: loaded.surah.revelation,
-                size: 22,
-                color: p.bronze,
-              ),
-            if (loaded != null) const SizedBox(width: 9),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    loaded?.surah.name ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: p.ink,
-                      fontSize: 16.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    first == null
-                        ? ''
-                        : 'Juz ${first.juz} · Page ${first.page}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: p.muted,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        title: const SizedBox.shrink(),
         actions: [
           IconButton(
             tooltip: _translation ? 'Hide translation' : 'Show translation',
@@ -159,6 +106,20 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
               color: _translation ? p.bronze : p.ink,
             ),
             onPressed: () => setState(() => _translation = !_translation),
+          ),
+          IconButton(
+            tooltip:
+                _transliteration
+                    ? 'Hide transliteration'
+                    : 'Show transliteration',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              Icons.spellcheck,
+              size: 20,
+              color: _transliteration ? p.bronze : p.ink,
+            ),
+            onPressed:
+                () => setState(() => _transliteration = !_transliteration),
           ),
           IconButton(
             tooltip: 'Reciter',
@@ -188,35 +149,22 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
       ),
       body: Column(
         children: [
-          _PlayerBar(
-            reciter: reciter,
-            status: status,
-            here: here,
-            busy: busy,
-            loading: audio.loading && here,
-            playing: audio.playing,
-            onPick: () => showReciterPicker(context, ref),
-            onPlay:
-                loaded == null
-                    ? null
-                    : () => _playPressed(loaded, reciter, audio),
-            onPrevious:
-                here ? () => ref.read(audioProvider.notifier).previous() : null,
-            onNext: here ? () => ref.read(audioProvider.notifier).next() : null,
-          ),
-          _SurahStrip(
-            surahs: surahs,
-            current: _current,
-            controller: _strip,
-            width: _stripItemWidth,
-            onPick: (number) {
-              if (number == _current) return;
-              _pages.animateToPage(
-                number - 1,
-                duration: const Duration(milliseconds: 280),
-                curve: Curves.easeOutCubic,
-              );
-            },
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+            child: SizedBox(
+              height: 80,
+              child:
+                  loaded == null
+                      ? const SizedBox.shrink()
+                      : SuraBanner(
+                        surah: loaded.surah,
+                        juz: first?.juz,
+                        page: first?.page,
+                        playing: here && audio.playing,
+                        loading: audio.loading && here,
+                        onPlay: () => _playPressed(loaded, reciter, audio),
+                      ),
+            ),
           ),
           Expanded(
             child: PageView.builder(
@@ -225,9 +173,6 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
               onPageChanged: (page) {
                 setState(() => _current = page + 1);
                 if (page + 2 <= 114) ref.read(surahViewProvider(page + 2));
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _scrollStrip(page + 1);
-                });
               },
               itemBuilder: (context, index) {
                 final surah = index + 1;
@@ -236,6 +181,7 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
                   surah: surah,
                   scale: profile.arabicScale,
                   translation: _translation,
+                  transliteration: _transliteration,
                   focusAyah: surah == widget.surah ? widget.focusAyah : null,
                   onTapped: (ayah) {
                     if (_tapped[surah] == ayah) return;
@@ -248,26 +194,29 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
           ),
         ],
       ),
+      bottomNavigationBar:
+          here
+              ? _PlayerBar(
+                reciter: reciter,
+                status: status,
+                here: here,
+                busy: busy,
+                loading: audio.loading && here,
+                playing: audio.playing,
+                onPick: () => showReciterPicker(context, ref),
+                onPlay:
+                    loaded == null
+                        ? null
+                        : () => _playPressed(loaded, reciter, audio),
+                onPrevious:
+                    here
+                        ? () => ref.read(audioProvider.notifier).previous()
+                        : null,
+                onNext:
+                    here ? () => ref.read(audioProvider.notifier).next() : null,
+              )
+              : null,
     );
-  }
-
-  void _scrollStrip(int surah, {bool animate = true}) {
-    if (!_strip.hasClients) return;
-    final position = _strip.position;
-    final target =
-        ((surah - 1) * _stripItemWidth -
-                (position.viewportDimension - _stripItemWidth) / 2)
-            .clamp(0.0, position.maxScrollExtent)
-            .toDouble();
-    if (animate) {
-      _strip.animateTo(
-        target,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-      );
-    } else {
-      _strip.jumpTo(target);
-    }
   }
 
   void _playPressed(SurahView view, Reciter reciter, AudioView audio) {
@@ -377,185 +326,167 @@ class _PlayerBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = QuranPalette.of(context);
+    final iconColor = p.isDark ? p.bg : p.surface;
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: p.bg,
-        border: Border(bottom: BorderSide(color: p.hairlineSoft)),
+        color: p.surface,
+        border: Border(top: BorderSide(color: p.hairline)),
       ),
-      child: Row(
-        children: [
-          InkWell(
-            onTap: onPick,
-            borderRadius: BorderRadius.circular(AlimRadius.pill),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.graphic_eq_rounded, size: 15, color: p.bronze),
-                  const SizedBox(width: 6),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 136),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          reciter.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: p.ink,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          child: SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: onPick,
+                    borderRadius: BorderRadius.circular(AlimRadius.pill),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.graphic_eq_rounded,
+                            size: 16,
+                            color: p.bronze,
                           ),
-                        ),
-                        Text(
-                          status,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: p.muted, fontSize: 9.5),
-                        ),
-                      ],
+                          const SizedBox(width: 7),
+                          Flexible(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  reciter.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: p.ink,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  status,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: p.muted,
+                                    fontSize: 9.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
+                ),
+                if (busy) ...[
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.4,
+                      color: p.bronze,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                 ],
-              ),
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Previous ayah',
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-            padding: EdgeInsets.zero,
-            icon: Icon(
-              Icons.skip_previous_rounded,
-              size: 21,
-              color: here ? p.ink : p.muted,
-            ),
-            onPressed: onPrevious,
-          ),
-          const SizedBox(width: 2),
-          InkResponse(
-            onTap: onPlay,
-            radius: 22,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: p.bronzeTint,
-                border: Border.all(color: p.faintBronze),
-              ),
-              child:
-                  loading
-                      ? Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.6,
-                          color: p.bronze,
+                _PlayerIcon(
+                  icon: Icons.skip_previous_rounded,
+                  tooltip: 'Previous ayah',
+                  color: here ? p.ink : p.muted,
+                  onTap: onPrevious,
+                ),
+                const SizedBox(width: 4),
+                Semantics(
+                  button: true,
+                  label: playing ? 'Pause recitation' : 'Play recitation',
+                  child: Material(
+                    color: p.bronze,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: onPlay,
+                      child: SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: Center(
+                          child:
+                              loading
+                                  ? SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: iconColor,
+                                    ),
+                                  )
+                                  : Icon(
+                                    playing
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded,
+                                    size: 28,
+                                    color: iconColor,
+                                  ),
                         ),
-                      )
-                      : Icon(
-                        here && playing
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        size: 22,
-                        color: p.bronze,
                       ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                _PlayerIcon(
+                  icon: Icons.skip_next_rounded,
+                  tooltip: 'Next ayah',
+                  color: here ? p.ink : p.muted,
+                  onTap: onNext,
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 2),
-          IconButton(
-            tooltip: 'Next ayah',
-            visualDensity: VisualDensity.compact,
-            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-            padding: EdgeInsets.zero,
-            icon: Icon(
-              Icons.skip_next_rounded,
-              size: 21,
-              color: here ? p.ink : p.muted,
-            ),
-            onPressed: onNext,
-          ),
-          if (busy) ...[
-            const SizedBox(width: 4),
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.4,
-                color: p.bronze,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _SurahStrip extends StatelessWidget {
-  const _SurahStrip({
-    required this.surahs,
-    required this.current,
-    required this.controller,
-    required this.width,
-    required this.onPick,
+class _PlayerIcon extends StatelessWidget {
+  const _PlayerIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.onTap,
   });
 
-  final List<Surah> surahs;
-  final int current;
-  final ScrollController controller;
-  final double width;
-  final ValueChanged<int> onPick;
+  final IconData icon;
+  final String tooltip;
+  final Color color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final p = QuranPalette.of(context);
-    return Container(
-      height: 38,
-      decoration: BoxDecoration(
-        color: p.surface,
-        border: Border(bottom: BorderSide(color: p.hairline)),
-      ),
-      child: ListView.builder(
-        controller: controller,
-        scrollDirection: Axis.horizontal,
-        itemExtent: width,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        itemCount: surahs.length,
-        itemBuilder: (context, i) {
-          final surah = surahs[i];
-          final active = surah.number == current;
-          return InkWell(
-            onTap: () => onPick(surah.number),
-            child: Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: active ? p.bronze : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-              ),
-              child: Text(
-                surah.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: active ? p.ink : p.muted,
-                  fontSize: 11,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
-            ),
-          );
-        },
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(icon, size: 24, color: color),
+          ),
+        ),
       ),
     );
   }
@@ -569,6 +500,7 @@ class _SurahBody extends ConsumerStatefulWidget {
     required this.surah,
     required this.scale,
     required this.translation,
+    required this.transliteration,
     required this.onTapped,
     required this.onListen,
     this.focusAyah,
@@ -577,6 +509,7 @@ class _SurahBody extends ConsumerStatefulWidget {
   final int surah;
   final double scale;
   final bool translation;
+  final bool transliteration;
   final ValueChanged<int> onTapped;
   final ValueChanged<int> onListen;
   final int? focusAyah;
@@ -611,7 +544,7 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
       final index = loaded.ayat.indexWhere((a) => a.number == next.ayah);
       if (index < 0) return;
       final header =
-          loaded.surah.number == 1 || loaded.surah.number == 9 ? 1 : 2;
+          loaded.surah.number == 1 || loaded.surah.number == 9 ? 0 : 1;
       _scroll.scrollTo(
         index: index + header,
         duration: const Duration(milliseconds: 350),
@@ -627,6 +560,7 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
         bookmarkedAyat,
         playingHere,
         audio.playing,
+        widget.transliteration,
       ),
       AsyncError(:final error) => Center(child: Text('$error')),
       _ => const SizedBox.shrink(),
@@ -640,14 +574,18 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
     Set<int> bookmarkedAyat,
     int? playingAyah,
     bool audioPlaying,
+    bool showTransliteration,
   ) {
+    final transliterations =
+        ref.watch(quranTransliterationProvider).valueOrNull ??
+        const <int, String>{};
     final focusIndex =
         widget.focusAyah == null
             ? null
             : view.ayat.indexWhere((a) => a.number == widget.focusAyah);
 
     final showBismillah = view.surah.number != 1 && view.surah.number != 9;
-    final headerCount = showBismillah ? 2 : 1;
+    final headerCount = showBismillah ? 1 : 0;
 
     // Landing exactly on a chosen ayah: the list is lazy, so the position is
     // addressed by item index, never by a guessed scroll offset.
@@ -679,13 +617,7 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
       ),
       itemCount: view.ayat.length + headerCount,
       itemBuilder: (context, i) {
-        if (i == 0) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: SuraBanner(surah: view.surah),
-          );
-        }
-        if (showBismillah && i == 1) {
+        if (showBismillah && i == 0) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 18),
             child: QuranBismillah(),
@@ -700,15 +632,13 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
           surahName: view.surah.name,
           scale: widget.scale,
           translation: widget.translation,
+          transliteration:
+              showTransliteration ? (transliterations[ayah.number] ?? '') : '',
           isLastRead: lastRead == ayah.number,
           bookmarked: bookmarkedAyat.contains(ayah.number),
           focused: focused,
           active: active,
           audioPlaying: audioPlaying,
-          onPlayPause:
-              active
-                  ? () => ref.read(audioProvider.notifier).toggle()
-                  : () => widget.onListen(ayah.number),
           onTap: () async {
             widget.onTapped(ayah.number);
             final milestone = await ref
@@ -734,8 +664,8 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
   }
 }
 
-/// One ayah in the long band: a rosette on the rail, the Arabic, the
-/// translation, and the small line that marks where the reader stopped.
+/// One ayah: the Arabic line, its Latin transliteration, the English meaning,
+/// and the quiet marks that say where the reader stopped.
 class _AyahTile extends StatelessWidget {
   const _AyahTile({
     super.key,
@@ -743,12 +673,12 @@ class _AyahTile extends StatelessWidget {
     required this.surahName,
     required this.scale,
     required this.translation,
+    required this.transliteration,
     required this.isLastRead,
     required this.bookmarked,
     required this.focused,
     required this.active,
     required this.audioPlaying,
-    required this.onPlayPause,
     required this.onTap,
   });
 
@@ -756,12 +686,12 @@ class _AyahTile extends StatelessWidget {
   final String surahName;
   final double scale;
   final bool translation;
+  final String transliteration;
   final bool isLastRead;
   final bool bookmarked;
   final bool focused;
   final bool active;
   final bool audioPlaying;
-  final VoidCallback onPlayPause;
   final VoidCallback onTap;
 
   @override
@@ -769,129 +699,104 @@ class _AyahTile extends StatelessWidget {
     final p = QuranPalette.of(context);
     final tint =
         active
-            ? p.bronze.withValues(alpha: p.isDark ? 0.10 : 0.09)
+            ? p.bronze.withValues(alpha: p.isDark ? 0.10 : 0.07)
             : focused
-            ? p.surfaceAlt.withValues(alpha: 0.75)
+            ? p.surfaceAlt.withValues(alpha: 0.65)
             : Colors.transparent;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(
-            color: tint,
-            border: Border(
-              left: BorderSide(
-                color: active ? p.bronze : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          padding: const EdgeInsets.fromLTRB(12, 13, 16, 13),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          color: tint,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                width: 45,
-                child: Column(
+              Text.rich(
+                TextSpan(
                   children: [
-                    AyahMedallion(
-                      number: ayah.ayah,
-                      width: 34,
-                      height: 45,
-                      color: active ? p.bronze : p.bronzeDeep,
-                      fill: active ? p.bronzeTint : p.surface,
-                    ),
-                    const SizedBox(height: 4),
-                    InkResponse(
-                      onTap: onPlayPause,
-                      radius: 18,
-                      child: Icon(
-                        active && audioPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        size: 16,
-                        color:
-                            active
-                                ? p.bronze
-                                : p.bronze.withValues(alpha: 0.65),
+                    TextSpan(text: ayah.textAr),
+                    TextSpan(
+                      text: ' ۝${quranDigits(ayah.ayah)}',
+                      style: TextStyle(
+                        fontFamily: arabicFamily,
+                        fontSize: 20 * scale,
+                        color: p.bronze,
                       ),
                     ),
                   ],
+                ),
+                textAlign: TextAlign.right,
+                textDirection: TextDirection.rtl,
+                style: TextStyle(
+                  fontFamily: quranFamily,
+                  fontSize: 23 * scale,
+                  height: 1.9,
+                  color: p.ink,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(text: ayah.textAr),
-                          TextSpan(
-                            text: ' ۝${quranDigits(ayah.ayah)}',
-                            style: TextStyle(
-                              fontFamily: arabicFamily,
-                              fontSize: 18 * scale,
-                              color: p.bronze,
-                            ),
-                          ),
-                        ],
-                      ),
-                      textAlign: TextAlign.right,
-                      textDirection: TextDirection.rtl,
-                      style: TextStyle(
-                        fontFamily: quranFamily,
-                        fontSize: 21 * scale,
-                        height: 1.95,
-                        color: p.ink,
-                      ),
-                    ),
-                    if (translation) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        ayah.textEn,
-                        style: TextStyle(
-                          color: p.translation,
-                          fontSize: 14,
-                          height: 1.6,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 7),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          '$surahName ${ayah.surah}:${ayah.ayah}',
-                          style: TextStyle(
-                            color: p.latin,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (bookmarked)
-                          Icon(Icons.bookmark, size: 14, color: p.bronze),
-                        if (isLastRead)
-                          QuranPill(label: 'Your place', color: p.bronze),
-                        if (ayah.sajda)
-                          const QuranPill(
-                            label: 'Sajda',
-                            color: AlimColors.rose,
-                          ),
-                        if (focused && !active)
-                          QuranPill(
-                            label: 'Opened here',
-                            icon: Icons.arrow_downward_rounded,
-                            color: p.latin,
-                          ),
-                      ],
-                    ),
-                  ],
+              if (transliteration.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                Text(
+                  transliteration,
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    color: p.muted,
+                    fontSize: 12.5,
+                    height: 1.45,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
+              ],
+              if (translation) ...[
+                const SizedBox(height: 7),
+                Text(
+                  ayah.textEn,
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    color: p.translation,
+                    fontSize: 15,
+                    height: 1.55,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 5,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    '$surahName ${ayah.surah}:${ayah.ayah}',
+                    style: TextStyle(
+                      color: p.latin,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (active)
+                    QuranPill(
+                      label: audioPlaying ? 'Playing' : 'Paused',
+                      icon:
+                          audioPlaying
+                              ? Icons.graphic_eq_rounded
+                              : Icons.pause_rounded,
+                      color: p.bronze,
+                    ),
+                  if (bookmarked)
+                    Icon(Icons.bookmark, size: 14, color: p.bronze),
+                  if (isLastRead)
+                    QuranPill(label: 'Your place', color: p.bronze),
+                  if (ayah.sajda)
+                    const QuranPill(label: 'Sajda', color: AlimColors.rose),
+                  if (focused && !active)
+                    QuranPill(
+                      label: 'Opened here',
+                      icon: Icons.arrow_downward_rounded,
+                      color: p.latin,
+                    ),
+                ],
               ),
             ],
           ),

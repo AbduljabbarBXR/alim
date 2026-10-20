@@ -398,6 +398,17 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                 ),
                 const Divider(height: 1),
+                SwitchListTile(
+                  secondary: const Icon(Icons.spellcheck),
+                  title: const Text('Transliteration'),
+                  subtitle: const Text('Latin letters under the Arabic'),
+                  value: profile.transliterationOn,
+                  onChanged:
+                      (v) => actions.saveProfile(
+                        profile.copyWith(transliterationOn: v),
+                      ),
+                ),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.menu_book_outlined),
                   title: const Text('Translation'),
@@ -702,6 +713,8 @@ class SettingsScreen extends ConsumerWidget {
                       'translations (Saheeh International, Pickthall, '
                       'Yusuf Ali, Hilali and Khan) from Tanzil.net, all '
                       '6,236 ayat.',
+                  'Transliteration: the en-simple Latin transliteration '
+                      'from quran-json.risanb.com, used under CC BY-SA 4.0.',
                   'Hadith: Sahih al-Bukhari, Sahih Muslim, an-Nawawi\'s '
                       'Forty, and the hadith Qudsi, every one of them '
                       'authentic.',

@@ -9,6 +9,7 @@ import 'package:alim/screens/shell.dart';
 import 'package:alim/screens/stories.dart';
 import 'package:alim/state.dart';
 import 'package:alim/theme.dart';
+import 'package:alim/widgets/quran_ornaments.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,9 @@ void main() {
     overrides: [
       storeProvider.overrideWithValue(store),
       todayProvider.overrideWithValue(monday),
+      quranTransliterationProvider.overrideWith(
+        (ref) => const {1: 'Bismillaahir-rahmaanir-raheem'},
+      ),
     ],
     child: MaterialApp(theme: buildAlimTheme(Brightness.light), home: child),
   );
@@ -118,6 +122,24 @@ void main() {
     expect(await store.lastRead(), 1);
   });
 
+  testWidgets('the reader has one header and a transliteration line', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(const QuranReaderScreen(surah: 1)));
+    await settle(tester);
+
+    expect(find.byType(SuraBanner), findsOneWidget);
+    expect(find.text('Bismillaahir-rahmaanir-raheem'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Hide transliteration'));
+    await settle(tester);
+    expect(find.text('Bismillaahir-rahmaanir-raheem'), findsNothing);
+
+    await tester.tap(find.byTooltip('Show transliteration'));
+    await settle(tester);
+    expect(find.text('Bismillaahir-rahmaanir-raheem'), findsOneWidget);
+  });
+
   testWidgets('swiping the reader carries on to the next surah and back', (
     tester,
   ) async {
@@ -183,6 +205,19 @@ void main() {
       find.text('In the name of Allah, the Beneficent, the Merciful.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('transliteration can be turned off in settings', (tester) async {
+    await tester.pumpWidget(wrap(const SettingsScreen()));
+    await settle(tester);
+
+    final tile = find.widgetWithText(SwitchListTile, 'Transliteration');
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await settle(tester);
+
+    final saved = await store.kvGet('profile');
+    expect(saved, contains('"transliterationOn":false'));
   });
 
   testWidgets('onboarding walks name, goal and reminder into a saved profile', (

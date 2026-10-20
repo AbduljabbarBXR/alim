@@ -327,6 +327,7 @@ class Profile {
     this.name = '',
     this.versesGoal = 5,
     this.translationOn = true,
+    this.transliterationOn = true,
     this.translation = 'sahih',
     this.arabicScale = 1.0,
     this.darkMode = false,
@@ -346,6 +347,7 @@ class Profile {
   final String name;
   final int versesGoal;
   final bool translationOn;
+  final bool transliterationOn;
   final String translation;
   final double arabicScale;
   final bool darkMode;
@@ -365,6 +367,7 @@ class Profile {
     String? name,
     int? versesGoal,
     bool? translationOn,
+    bool? transliterationOn,
     String? translation,
     double? arabicScale,
     bool? darkMode,
@@ -383,6 +386,7 @@ class Profile {
     name: name ?? this.name,
     versesGoal: versesGoal ?? this.versesGoal,
     translationOn: translationOn ?? this.translationOn,
+    transliterationOn: transliterationOn ?? this.transliterationOn,
     translation: translation ?? this.translation,
     arabicScale: arabicScale ?? this.arabicScale,
     darkMode: darkMode ?? this.darkMode,

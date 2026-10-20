@@ -2,7 +2,7 @@ name: alim
 description: "Alim — your deen and your day, together. Qur'an, sahih hadith, stories, daily worship and work in one place."
 publish_to: 'none'
 
-version: 1.4.4+13
+version: 1.4.5+14
 
 environment:
   sdk: ^3.7.2
@@ -61,6 +61,7 @@ flutter:
 
   assets:
     - assets/db/alim.db.gz
+    - assets/data/quran_transliteration.json
 
   fonts:
     - family: Amiri

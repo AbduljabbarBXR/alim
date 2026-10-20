@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -65,6 +66,7 @@ class ProfileNotifier extends StateNotifier<Profile> {
         name: m['name'] as String? ?? '',
         versesGoal: m['versesGoal'] as int? ?? 5,
         translationOn: m['translationOn'] as bool? ?? true,
+        transliterationOn: m['transliterationOn'] as bool? ?? true,
         translation: m['translation'] as String? ?? 'sahih',
         arabicScale: (m['arabicScale'] as num?)?.toDouble() ?? 1.0,
         darkMode: m['darkMode'] as bool? ?? false,
@@ -98,6 +100,7 @@ class ProfileNotifier extends StateNotifier<Profile> {
         'name': next.name,
         'versesGoal': next.versesGoal,
         'translationOn': next.translationOn,
+        'transliterationOn': next.transliterationOn,
         'translation': next.translation,
         'arabicScale': next.arabicScale,
         'darkMode': next.darkMode,
@@ -164,6 +167,28 @@ final surahViewProvider = FutureProvider.family<SurahView, int>((
 
 final translationsProvider = FutureProvider<List<Translation>>((ref) {
   return ref.watch(storeProvider).translations();
+});
+
+/// Latin transliteration for every ayah, shipped as one small JSON file so
+/// the content database does not have to grow another column.
+final quranTransliterationProvider = FutureProvider<Map<int, String>>((
+  ref,
+) async {
+  final raw = await rootBundle.loadString(
+    'assets/data/quran_transliteration.json',
+  );
+  final chapters = jsonDecode(raw) as List<dynamic>;
+  final result = <int, String>{};
+  var number = 0;
+  for (final chapter in chapters) {
+    final verses = (chapter as Map<String, dynamic>)['verses'] as List<dynamic>;
+    for (final verse in verses) {
+      number++;
+      result[number] =
+          (verse as Map<String, dynamic>)['transliteration'] as String;
+    }
+  }
+  return result;
 });
 
 final searchProvider = FutureProvider.family<List<Ayah>, String>((
