@@ -658,9 +658,14 @@ class _WeekCard extends StatelessWidget {
                       context,
                       weekly[i],
                       _dayInitial(
-                        now.subtract(Duration(days: weekly.length - 1 - i)),
+                        DateTime(
+                          now.year,
+                          now.month,
+                          now.day - (now.weekday - 1) + i,
+                        ),
                       ),
-                      i == weekly.length - 1,
+                      i == now.weekday - 1,
+                      i > now.weekday - 1,
                       max,
                     ),
                   ),
@@ -696,10 +701,13 @@ class _WeekCard extends StatelessWidget {
     int value,
     String label,
     bool today,
+    bool future,
     int max,
   ) {
     final primary = Theme.of(context).colorScheme.primary;
     final muted = AlimColors.mutedOf(context);
+    final labelColor =
+        future ? muted.withValues(alpha: 0.55) : (today ? primary : muted);
     final fill =
         value == 0
             ? AlimColors.hairlineOf(context)
@@ -716,7 +724,7 @@ class _WeekCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
-              color: today ? primary : muted,
+              color: labelColor,
             ),
           ),
           const SizedBox(height: 4),
@@ -736,7 +744,7 @@ class _WeekCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 10.5,
               fontWeight: today ? FontWeight.w800 : FontWeight.w400,
-              color: today ? primary : muted,
+              color: labelColor,
             ),
           ),
         ],

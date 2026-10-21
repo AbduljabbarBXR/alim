@@ -173,6 +173,7 @@ class Story {
     required this.ayahNumber,
     required this.hadithId,
     required this.hadithRef,
+    this.source,
   });
 
   final int id;
@@ -192,6 +193,9 @@ class Story {
   /// A readable reference for that hadith, e.g. "Sahih al-Bukhari 3364".
   final String? hadithRef;
 
+  /// The primary reference shown with the story.
+  final String? source;
+
   List<String> get paragraphs =>
       body.split('\n\n').where((p) => p.trim().isNotEmpty).toList();
 
@@ -206,6 +210,7 @@ class Story {
     ayahNumber: m['ayah_number'] as int?,
     hadithId: m['hadith_id'] as int?,
     hadithRef: m['hadith_ref'] as String?,
+    source: m['source'] as String?,
   );
 }
 

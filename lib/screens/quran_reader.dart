@@ -105,8 +105,11 @@ class _QuranReaderScreenState extends ConsumerState<QuranReaderScreen> {
                 : 'Tap play to listen');
 
     return Scaffold(
+      backgroundColor: p.bg,
       appBar: AppBar(
         toolbarHeight: 52,
+        backgroundColor: p.bg,
+        surfaceTintColor: Colors.transparent,
         titleSpacing: 0,
         title: const SizedBox.shrink(),
         actions: [
@@ -811,7 +814,6 @@ class _SurahBodyState extends ConsumerState<_SurahBody> {
             final milestone = await ref
                 .read(actionsProvider)
                 .markAyahRead(surah: ayah.surah, ayah: ayah.ayah);
-            await ref.read(actionsProvider).setLastRead(ayah.number);
             if (!context.mounted) return;
             if (milestone != null) {
               HapticFeedback.mediumImpact();
@@ -995,7 +997,7 @@ class _AyahTile extends StatelessWidget {
                         if (bookmarked)
                           Icon(Icons.bookmark, size: 14, color: p.bronze),
                         if (isLastRead)
-                          QuranPill(label: 'Your place', color: p.bronze),
+                          QuranPill(label: 'Last read', color: p.bronze),
                         if (ayah.sajda)
                           const QuranPill(
                             label: 'Sajda',
@@ -1147,11 +1149,11 @@ class _AyahSheet extends ConsumerWidget {
             ),
             ListTile(
               leading: Icon(
-                isLastRead ? Icons.place : Icons.place_outlined,
+                isLastRead ? Icons.check_circle_outline : Icons.place_outlined,
                 color: isLastRead ? AlimColors.gold : null,
               ),
               title: Text(
-                isLastRead ? 'This is your place' : 'Mark as last read',
+                isLastRead ? 'Last read' : 'Mark as last read',
               ),
               onTap:
                   isLastRead
@@ -1164,7 +1166,7 @@ class _AyahSheet extends ConsumerWidget {
                             .setLastRead(ayah.number);
                         messenger.showSnackBar(
                           const SnackBar(
-                            content: Text('Marked as your place.'),
+                            content: Text('Marked as last read.'),
                           ),
                         );
                       },

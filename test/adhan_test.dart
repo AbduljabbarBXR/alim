@@ -14,9 +14,9 @@ void main() {
     expect(Notifications.prayersFromCsv(''), isEmpty);
   });
 
-  test('adhan ids do not collide across a week', () {
+  test('adhan ids do not collide across a month', () {
     final ids = <int>{};
-    for (var day = 0; day < 7; day++) {
+    for (var day = 0; day < Notifications.adhanHorizonDays; day++) {
       for (final prayer in Notifications.adhanPrayers) {
         expect(prayer, isNot(AlimPrayer.sunrise));
         final id = Notifications.adhanSlotId(day, prayer);

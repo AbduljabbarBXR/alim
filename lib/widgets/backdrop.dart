@@ -61,84 +61,23 @@ class _ArabesquePainter extends CustomPainter {
           stops: const [0, 0.62, 1],
         ).createShader(rect),
     );
-
-    final short = math.min(size.width, size.height);
-    _medallion(
-      canvas,
-      Offset(size.width * 0.86, size.height * 0.11),
-      short * 0.40,
-    );
-    _medallion(
-      canvas,
-      Offset(size.width * 0.02, size.height * 0.88),
-      short * 0.30,
-    );
-
     _lattice(canvas, size);
-    _watermark(canvas, size);
   }
 
   void _lattice(Canvas canvas, Size size) {
-    final gold = AlimColors.gold.withValues(alpha: dark ? 0.13 : 0.115);
-    final leaf = (dark ? AlimColors.leafTint : AlimColors.leafDeep).withValues(
-      alpha: dark ? 0.055 : 0.035,
-    );
-    final goldPaint =
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.9
-          ..color = gold;
-    final leafPaint =
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.6
-          ..color = leaf;
-
-    const step = 138.0;
-    final centers = <Offset>[];
-    var row = 0;
-    for (var y = -step * 0.5; y < size.height + step; y += step) {
-      final shift = row.isOdd ? step / 2 : 0.0;
-      for (var x = -step * 0.5 + shift; x < size.width + step; x += step) {
-        centers.add(Offset(x, y));
-      }
-      row++;
-    }
-
-    for (final c in centers) {
-      _star(canvas, c, step * 0.25, step * 0.108, goldPaint);
-      canvas.drawCircle(c, step * 0.30, leafPaint);
-    }
-
-    for (var i = 0; i < centers.length; i++) {
-      final c = centers[i];
-      for (var j = i + 1; j < centers.length; j++) {
-        final other = centers[j];
-        if ((other - c).distance <= step * 1.05) {
-          canvas.drawLine(c, other, leafPaint);
-        }
-      }
-    }
-  }
-
-  void _medallion(Canvas canvas, Offset center, double radius) {
     final paint =
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.9
-          ..color = AlimColors.gold.withValues(alpha: dark ? 0.10 : 0.085);
-    canvas.drawCircle(center, radius, paint);
-    canvas.drawCircle(center, radius * 0.86, paint);
-    _star(canvas, center, radius * 0.82, radius * 0.64, paint);
-    _star(canvas, center, radius * 0.56, radius * 0.42, paint);
-    _star(canvas, center, radius * 0.30, radius * 0.20, paint);
-    for (var i = 0; i < 16; i++) {
-      final angle = i * math.pi / 8;
-      final from =
-          center + Offset(math.cos(angle), math.sin(angle)) * (radius * 0.86);
-      final to =
-          center + Offset(math.cos(angle), math.sin(angle)) * (radius * 0.995);
-      canvas.drawLine(from, to, paint);
+          ..strokeWidth = 0.8
+          ..color = AlimColors.gold.withValues(alpha: dark ? 0.075 : 0.06);
+    const step = 118.0;
+    var row = 0;
+    for (var y = -step * 0.4; y < size.height + step; y += step) {
+      final shift = row.isOdd ? step / 2 : 0.0;
+      for (var x = -step * 0.4 + shift; x < size.width + step; x += step) {
+        _star(canvas, Offset(x, y), step * 0.40, step * 0.145, paint);
+      }
+      row++;
     }
   }
 
@@ -163,26 +102,6 @@ class _ArabesquePainter extends CustomPainter {
     }
     path.close();
     canvas.drawPath(path, paint);
-  }
-
-  void _watermark(Canvas canvas, Size size) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: 'قرآن',
-        style: TextStyle(
-          fontFamily: quranFamily,
-          fontSize: math.min(size.width, size.height) * 0.42,
-          height: 1,
-          color: AlimColors.gold.withValues(alpha: dark ? 0.05 : 0.045),
-        ),
-      ),
-      textDirection: TextDirection.rtl,
-    )..layout();
-    canvas.save();
-    canvas.translate(size.width - painter.width * 0.55, size.height * 0.58);
-    canvas.rotate(-0.07);
-    painter.paint(canvas, Offset.zero);
-    canvas.restore();
   }
 
   @override

@@ -23,7 +23,7 @@ class AlimStore {
 
   /// Bumped whenever the shipped content changes. An install older than this
   /// gets its content replaced while its own record is copied across.
-  static const contentVersion = 4;
+  static const contentVersion = 5;
 
   static const _userTables = [
     'user_kv',
@@ -747,6 +747,21 @@ class AlimStore {
     final out = <int>[];
     for (var i = days - 1; i >= 0; i--) {
       final d = now.subtract(Duration(days: i));
+      final log = await day(todayKey(d));
+      out.add(log.verses);
+    }
+    return out;
+  }
+
+  static DateTime startOfWeek(DateTime now) =>
+      DateTime(now.year, now.month, now.day - (now.weekday - 1));
+
+  /// Verses read Monday through Sunday of the week containing [now].
+  Future<List<int>> versesThisWeek({required DateTime now}) async {
+    final start = startOfWeek(now);
+    final out = <int>[];
+    for (var i = 0; i < 7; i++) {
+      final d = DateTime(start.year, start.month, start.day + i);
       final log = await day(todayKey(d));
       out.add(log.verses);
     }

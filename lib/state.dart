@@ -370,7 +370,7 @@ final weeklyProvider = FutureProvider<List<int>>((ref) {
   ref.watch(revisionProvider);
   return ref
       .watch(storeProvider)
-      .versesLastDays(7, now: ref.watch(todayProvider));
+      .versesThisWeek(now: ref.watch(todayProvider));
 });
 
 final bookmarksProvider = FutureProvider.family<List<Bookmark>, String?>((
@@ -585,17 +585,23 @@ class AlimActions {
     }
     final granted = await Notifications.requestPermission();
     if (!granted) return 'Android refused the notification permission.';
-    await Notifications.requestExactAlarms();
+    final exact = await Notifications.requestExactAlarms();
     final next = profile.copyWith(adhanOn: true);
-    await _ref.read(profileProvider.notifier).save(next);
-    await Notifications.scheduleAdhan(
+    final scheduled = await Notifications.scheduleAdhan(
       place: place,
       method: next.prayerMethod,
       asrHanafi: next.asrHanafi,
       sound: next.adhanSound,
       prayers: Notifications.prayersFromCsv(next.adhanPrayers),
     );
+    if (!scheduled.ok) {
+      return 'The adhan could not be scheduled. Open Notification check.';
+    }
+    await _ref.read(profileProvider.notifier).save(next);
     _bump();
+    if (!exact) {
+      return 'The adhan is set. Allow exact alarms so Android does not delay it.';
+    }
     return null;
   }
 
@@ -704,7 +710,7 @@ final badges = <AlimBadge>[
     'story-all',
     'The story keeper',
     'Every story read',
-    (s) => s.stories >= 46,
+    (s) => s.stories >= 146,
   ),
   AlimBadge(
     'perfect',

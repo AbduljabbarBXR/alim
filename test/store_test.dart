@@ -199,15 +199,15 @@ void main() {
   });
 
   group('the stories', () {
-    test('forty-six stories, each with a body and a lesson', () async {
+    test('one hundred and forty-six stories, each with a body and a lesson', () async {
       final stories = await store.stories();
-      expect(stories, hasLength(46));
+      expect(stories, hasLength(146));
       for (final s in stories) {
         expect(s.paragraphs, isNotEmpty);
         expect(s.lesson, isNotEmpty);
         expect(s.minutes, greaterThan(0));
       }
-      expect(stories.where((s) => s.ayahNumber != null), hasLength(44));
+      expect(stories.where((s) => s.ayahNumber != null), hasLength(125));
 
       final sourced = stories.where((s) => s.hadithId != null).toList();
       expect(sourced, hasLength(12));
@@ -218,9 +218,17 @@ void main() {
         expect(source.textEn, isNotEmpty);
       }
 
-      expect(stories.where((s) => s.category == 'Prophets'), hasLength(25));
-      expect(stories.where((s) => s.category == 'Companions'), hasLength(12));
-      expect(stories.where((s) => s.category == 'Chosen'), hasLength(9));
+      final withSource = stories.where((s) => s.source != null).toList();
+      expect(withSource, hasLength(100));
+      for (final s in withSource) {
+        expect(s.source, isNotEmpty);
+      }
+
+      expect(stories.where((s) => s.category == 'Prophets'), hasLength(45));
+      expect(stories.where((s) => s.category == 'Companions'), hasLength(42));
+      expect(stories.where((s) => s.category == 'Chosen'), hasLength(29));
+      expect(stories.where((s) => s.category == 'Mercy'), hasLength(15));
+      expect(stories.where((s) => s.category == 'Women'), hasLength(15));
     });
   });
 
@@ -344,7 +352,7 @@ void main() {
     final after = await AlimStore.open(overridePath: dir.path);
     expect(await after.kvGet('marker'), 'kept');
     expect(await after.lastRead(), 262);
-    expect(await after.stories(), hasLength(46));
+    expect(await after.stories(), hasLength(146));
     await after.close();
     await dir.delete(recursive: true);
   });

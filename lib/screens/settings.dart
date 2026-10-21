@@ -12,6 +12,7 @@ import '../widgets/common.dart';
 import 'companion.dart';
 import 'onboarding.dart';
 import 'prayer.dart';
+import 'notification_health.dart';
 import 'qibla.dart';
 import 'reciters.dart';
 
@@ -511,14 +512,27 @@ class SettingsScreen extends ConsumerWidget {
                         }
                         return;
                       }
-                      await Notifications.requestExactAlarms();
-                      await Notifications.scheduleDaily(
+                      final exact = await Notifications.requestExactAlarms();
+                      final scheduled = await Notifications.scheduleDaily(
                         hour: profile.reminderHour,
                         minute: profile.reminderMinute,
                         body:
                             'Your day has a few open pages. Qur\'an, a '
                             'hadith, a dhikr.',
                       );
+                      if (!scheduled.ok) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'The reminder could not be scheduled. '
+                                'Open Notification check.',
+                              ),
+                            ),
+                          );
+                        }
+                        return;
+                      }
                       await Notifications.remindSetNow(
                         hour: profile.reminderHour,
                         minute: profile.reminderMinute,
@@ -534,7 +548,13 @@ class SettingsScreen extends ConsumerWidget {
                         );
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Reminder set for $h:$m, every day.'),
+                            content: Text(
+                              exact
+                                  ? 'Reminder set for $h:$m, every day.'
+                                  : 'Reminder set for $h:$m. '
+                                      'Allow exact alarms so Android does '
+                                      'not delay it.',
+                            ),
                           ),
                         );
                       }
@@ -563,13 +583,26 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                       );
                       if (picked != null) {
-                        await Notifications.scheduleDaily(
+                        final scheduled = await Notifications.scheduleDaily(
                           hour: picked.hour,
                           minute: picked.minute,
                           body:
                               'Your day has a few open pages. Qur\'an, a '
                               'hadith, a dhikr.',
                         );
+                        if (!scheduled.ok) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'The reminder could not be scheduled. '
+                                  'Open Notification check.',
+                                ),
+                              ),
+                            );
+                          }
+                          return;
+                        }
                         await actions.saveProfile(
                           profile.copyWith(
                             reminderHour: picked.hour,
@@ -581,6 +614,23 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ],
               ],
+            ),
+          ),
+          AlimCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.fact_check_outlined),
+              title: const Text('Notification check'),
+              subtitle: const Text(
+                'Permissions, exact alarms, next scheduled and tests',
+              ),
+              trailing: const Icon(Icons.chevron_right, size: 19),
+              onTap:
+                  () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationHealthScreen(),
+                    ),
+                  ),
             ),
           ),
           const SectionHeader('Appearance'),
@@ -718,9 +768,9 @@ class SettingsScreen extends ConsumerWidget {
                   'Hadith: Sahih al-Bukhari, Sahih Muslim, an-Nawawi\'s '
                       'Forty, and the hadith Qudsi, every one of them '
                       'authentic.',
-                  'Stories: forty-six tellings written for Alim, each '
-                      'anchored to an ayah, and where possible to the '
-                      'hadith that carries it.',
+                  'Stories: one hundred and forty-six tellings written '
+                      'for Alim, each with a source, and where possible '
+                      'anchored to an ayah and the hadith that carries it.',
                   'Audio: ayah by ayah from everyayah.com. Stream any '
                       'voice, or download a surah or a whole voice for '
                       'offline listening.',

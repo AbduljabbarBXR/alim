@@ -7,14 +7,44 @@ import 'package:timezone/timezone.dart' as tz;
 import 'location.dart';
 import 'prayer.dart';
 
-/// One quiet nudge a day. Everything is best-effort: if the platform refuses
-/// the alarm the app still works, it simply stays silent.
+class NotificationSchedule {
+  const NotificationSchedule({
+    required this.count,
+    required this.exact,
+    this.error,
+  });
+
+  final int count;
+  final bool exact;
+  final String? error;
+
+  bool get ok => error == null && count > 0;
+}
+
+class NotificationHealth {
+  const NotificationHealth({
+    required this.ready,
+    required this.enabled,
+    required this.exact,
+    required this.pending,
+  });
+
+  final bool ready;
+  final bool enabled;
+  final bool exact;
+  final List<PendingNotificationRequest> pending;
+}
+
+/// One quiet nudge a day. Scheduling reports what actually happened so the
+/// interface never claims a reminder is set when Android refused it.
 class Notifications {
   Notifications._();
 
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _ready = false;
   static bool _askedDownloadPermission = false;
+
+  static const adhanHorizonDays = 30;
 
   /// The icon the system shows in the status bar. It must be a real drawable
   /// resource; the launcher mipmap is not one, and an invalid icon makes every
@@ -80,6 +110,46 @@ class Notifications {
     } catch (e) {
       debugPrint('alim: notifications unavailable: $e');
     }
+  }
+
+  static AndroidFlutterLocalNotificationsPlugin? _android() =>
+      _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+
+  static DateTime? scheduledAt(PendingNotificationRequest request) {
+    final payload = request.payload;
+    final parsed = payload == null ? null : DateTime.tryParse(payload);
+    return parsed?.toLocal();
+  }
+
+  static Future<NotificationHealth> health() async {
+    await init();
+    final android = _android();
+    var enabled = false;
+    var exact = false;
+    var pending = <PendingNotificationRequest>[];
+    try {
+      enabled = await android?.areNotificationsEnabled() ?? false;
+      exact = await android?.canScheduleExactNotifications() ?? false;
+      pending = await _plugin.pendingNotificationRequests();
+      pending.sort((a, b) {
+        final left = scheduledAt(a);
+        final right = scheduledAt(b);
+        if (left == null) return 1;
+        if (right == null) return -1;
+        return left.compareTo(right);
+      });
+    } catch (e) {
+      debugPrint('alim: could not read notification health: $e');
+    }
+    return NotificationHealth(
+      ready: _ready,
+      enabled: enabled,
+      exact: exact,
+      pending: pending,
+    );
   }
 
   /// The timezone database first, then the platform's zone by name, then a
@@ -155,15 +225,15 @@ class Notifications {
     }
   }
 
-  static Future<void> scheduleDaily({
+  static Future<NotificationSchedule> scheduleDaily({
     required int hour,
     required int minute,
     required String body,
   }) async {
     await init();
+    final exact = await _canExact();
     try {
       await _plugin.cancel(1);
-      final exact = await _canExact();
       final now = tz.TZDateTime.now(tz.local);
       var when = tz.TZDateTime(
         tz.local,
@@ -187,20 +257,24 @@ class Notifications {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
+        payload: when.toIso8601String(),
       );
+      return NotificationSchedule(count: 1, exact: exact);
     } catch (e) {
       debugPrint('alim: could not schedule: $e');
+      return NotificationSchedule(count: 0, exact: exact, error: '$e');
     }
   }
 
   /// A confirmation the moment the reminder is switched on, so the sound and
   /// the look can be heard and seen right away.
-  static Future<void> remindSetNow({
+  static Future<bool> remindSetNow({
     required int hour,
     required int minute,
   }) async {
     await init();
     try {
+      if (await _android()?.areNotificationsEnabled() != true) return false;
       await _plugin.show(
         2,
         'Reminder set',
@@ -208,7 +282,47 @@ class Notifications {
             'This is how it will sound.',
         _dailyDetails,
       );
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> scheduleTest({Duration delay = Duration.zero}) async {
+    await init();
+    try {
+      if (await _android()?.areNotificationsEnabled() != true) return false;
+      await _plugin.cancel(3);
+      if (delay <= Duration.zero) {
+        await _plugin.show(
+          3,
+          'Test notification',
+          'Notifications are working. This message is a test from Alim.',
+          _dailyDetails,
+        );
+        return true;
+      }
+      final when = tz.TZDateTime.now(tz.local).add(delay);
+      final exact = await _canExact();
+      await _plugin.zonedSchedule(
+        3,
+        'Test notification',
+        'Notifications are working. This message is a test from Alim.',
+        when,
+        _dailyDetails,
+        androidScheduleMode:
+            exact
+                ? AndroidScheduleMode.exactAllowWhileIdle
+                : AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: when.toIso8601String(),
+      );
+      return true;
+    } catch (e) {
+      debugPrint('alim: could not schedule the test: $e');
+      return false;
+    }
   }
 
   static Future<void> cancelDaily() async {
@@ -266,7 +380,7 @@ class Notifications {
     AlimPrayer.isha,
   ];
 
-  /// A stable id for one prayer on one of the next seven days.
+  /// A stable id for one prayer on one of the next [adhanHorizonDays] days.
   static int adhanSlotId(int dayOffset, AlimPrayer prayer) =>
       100 + dayOffset * 10 + prayer.index;
 
@@ -314,9 +428,9 @@ class Notifications {
     );
   }
 
-  /// Writes the next seven days of call to prayer. Exact alarms are used when
+  /// Writes the next month of call to prayer. Exact alarms are used when
   /// Android allows them, otherwise the alarm is left to the system.
-  static Future<void> scheduleAdhan({
+  static Future<NotificationSchedule> scheduleAdhan({
     required AlimLocation place,
     required String method,
     required bool asrHanafi,
@@ -326,16 +440,18 @@ class Notifications {
     await init();
     if (prayers.isEmpty) {
       await cancelAdhan();
-      return;
+      return const NotificationSchedule(count: 0, exact: false);
     }
     final exact = await _canExact();
+    var count = 0;
+    String? error;
     try {
       for (var id = 100; id <= 999; id++) {
         await _plugin.cancel(id);
       }
       final now = tz.TZDateTime.now(tz.local);
       final today = DateTime.now();
-      for (var offset = 0; offset < 7; offset++) {
+      for (var offset = 0; offset < adhanHorizonDays; offset++) {
         final day = DateTime(today.year, today.month, today.day + offset);
         final prayerDay = PrayerDay.forPlace(
           place: place,
@@ -358,12 +474,18 @@ class Notifications {
                     : AndroidScheduleMode.inexactAllowWhileIdle,
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
+            payload: when.toIso8601String(),
           );
+          count++;
         }
       }
     } catch (e) {
+      error = '$e';
+      count = 0;
+      await cancelAdhan();
       debugPrint('alim: could not schedule the adhan: $e');
     }
+    return NotificationSchedule(count: count, exact: exact, error: error);
   }
 
   static Future<void> cancelAdhan() async {
@@ -381,15 +503,19 @@ class Notifications {
     await init();
     try {
       if (await _canExact()) {
+        final when = tz.TZDateTime.now(
+          tz.local,
+        ).add(const Duration(seconds: 5));
         await _plugin.zonedSchedule(
           99,
           'Adhan preview',
           'This is how the call to prayer will sound.',
-          tz.TZDateTime.now(tz.local).add(const Duration(seconds: 5)),
+          when,
           NotificationDetails(android: _adhanDetails(sound)),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
+          payload: when.toIso8601String(),
         );
         return;
       }

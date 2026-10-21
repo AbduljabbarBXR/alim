@@ -80,11 +80,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           .saveProfile(profile.copyWith(reminderOn: false));
       return;
     }
-    await Notifications.scheduleDaily(
+    final scheduled = await Notifications.scheduleDaily(
       hour: _reminderTime.hour,
       minute: _reminderTime.minute,
       body: 'Your day has a few open pages. Qur\'an, a hadith, a dhikr.',
     );
+    if (!scheduled.ok) {
+      await ref
+          .read(actionsProvider)
+          .saveProfile(profile.copyWith(reminderOn: false));
+    }
   }
 
   @override

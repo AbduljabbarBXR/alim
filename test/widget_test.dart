@@ -113,7 +113,11 @@ void main() {
     await tester.tap(find.text('Al-Faatiha 1:1'));
     await settle(tester);
     expect(find.text('Read today'), findsOneWidget);
-    expect(find.text('This is your place'), findsOneWidget);
+    expect(find.text('Mark as last read'), findsOneWidget);
+
+    await tester.tap(find.text('Mark as last read'));
+    await settle(tester);
+    expect(find.text('Last read'), findsOneWidget);
     expect(find.textContaining('First ayah today'), findsOneWidget);
 
     final read = await store.kvGet('read_set_${AlimStore.todayKey(monday)}');
@@ -218,6 +222,22 @@ void main() {
     await tester.pumpWidget(wrap(StoryDetailScreen(story: unsourced)));
     await settle(tester);
     expect(find.text('In the Sunnah'), findsNothing);
+  });
+
+  testWidgets('a new story shows its source', (tester) async {
+    final stories = await store.stories();
+    final story = stories.firstWhere((s) => s.source != null);
+    await tester.pumpWidget(wrap(StoryDetailScreen(story: story)));
+    await settle(tester);
+    await scrollTo(tester, 'Source', maxDrags: 20);
+    expect(find.text(story.source!), findsOneWidget);
+  });
+
+  testWidgets('the story shelves include mercy and women', (tester) async {
+    await tester.pumpWidget(wrap(const StoriesScreen()));
+    await settle(tester);
+    expect(find.text('Mercy'), findsOneWidget);
+    expect(find.text('Women'), findsOneWidget);
   });
 
   testWidgets('choosing a translation changes what the reader shows', (

@@ -8,11 +8,12 @@ Sources (all public domain / open licence):
   * Surah metadata — fawazahmed0/quran-api info.json
   * Hadith        — fawazahmed0/hadith-api, Sahih al-Bukhari, Sahih Muslim,
                     Forty Hadith of an-Nawawi, Forty Hadith Qudsi (eng + ara)
-  * Stories       — authored for Alim (tool/stories_a.json ... stories_d.json)
+  * Stories       — authored for Alim (tool/stories_a.json ... stories_i.json)
 
 Run:  python3 tool/build_db.py
 """
 
+import glob
 import json
 import os
 import re
@@ -99,11 +100,11 @@ def main() -> None:
     for slug, text in translations.items():
         assert set(text.keys()) == ar_keys, slug
     stories = []
-    for part in ("a", "b", "c", "d"):
-        path = os.path.join(ROOT, "tool", f"stories_{part}.json")
+    for path in sorted(glob.glob(os.path.join(ROOT, "tool", "stories_*.json"))):
         with open(path, encoding="utf-8") as fh:
             stories.extend(json.load(fh)["stories"])
     stories.sort(key=lambda s: s["id"])
+    assert len({s["id"] for s in stories}) == len(stories)
 
     if os.path.exists(OUT):
         os.remove(OUT)
@@ -198,7 +199,8 @@ def main() -> None:
             ayah_number INTEGER,
             words INTEGER NOT NULL,
             hadith_id INTEGER,
-            hadith_ref TEXT
+            hadith_ref TEXT,
+            source TEXT
         );
 
         -- User data. Created here so a fresh install has its tables waiting;
@@ -439,7 +441,7 @@ def main() -> None:
             print(f"  story {s['id']:>2} none")
 
         c.execute(
-            "INSERT INTO story VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO story VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 s["id"],
                 s["category"],
@@ -452,10 +454,11 @@ def main() -> None:
                 words,
                 hid,
                 href,
+                s.get("source"),
             ),
         )
 
-    c.execute("INSERT INTO meta VALUES ('db_version', '4')")
+    c.execute("INSERT INTO meta VALUES ('db_version', '5')")
     c.execute("INSERT INTO meta VALUES ('ayatod', '')")
     c.execute("INSERT INTO meta VALUES ('quran_source', 'Uthmani Hafs text, fawazahmed0/quran-api (public domain)')")
     c.execute("INSERT INTO meta VALUES ('quran_translation', 'Saheeh International (default), Pickthall, Yusuf Ali, Hilali and Khan, all via Tanzil.net')")

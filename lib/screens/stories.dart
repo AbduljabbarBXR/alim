@@ -28,23 +28,24 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AlimSpace.lg),
-              child: Row(
-                children: [
-                  for (final f in const [
-                    'All',
-                    'Prophets',
-                    'Companions',
-                    'Chosen',
-                  ])
-                    Padding(
-                      padding: const EdgeInsets.only(right: AlimSpace.xs),
-                      child: ChoiceChip(
-                        label: Text(f),
-                        selected: _filter == f,
-                        onSelected: (_) => setState(() => _filter = f),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final f in {
+                      'All',
+                      for (final s in value) s.category,
+                    })
+                      Padding(
+                        padding: const EdgeInsets.only(right: AlimSpace.xs),
+                        child: ChoiceChip(
+                          label: Text(f),
+                          selected: _filter == f,
+                          onSelected: (_) => setState(() => _filter = f),
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: AlimSpace.sm),
@@ -268,6 +269,42 @@ class StoryDetailScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (story.source != null) ...[
+            const SizedBox(height: AlimSpace.sm),
+            AlimCard(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.source_outlined,
+                    size: 18,
+                    color: AlimColors.gold,
+                  ),
+                  const SizedBox(width: AlimSpace.xs),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Source',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          story.source!,
+                          style: TextStyle(
+                            color: AlimColors.mutedOf(context),
+                            height: 1.45,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (ayah != null) ...[
             const SectionHeader('In the Qur\'an'),
             AlimCard(
